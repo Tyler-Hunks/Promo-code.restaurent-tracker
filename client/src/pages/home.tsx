@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Copy, Ticket, Plus, Layers, Search } from "lucide-react";
-import type { PromoCode, BulkGenerate } from "@shared/schema";
+import type { PromoCode, BulkGenerate, CampaignGenerate } from "@shared/schema";
 
 export default function Home() {
   const [searchTerm, setSearchTerm] = useState("");
@@ -20,6 +20,11 @@ export default function Home() {
   const [redeemCode, setRedeemCode] = useState("");
   const [isRedeemModalOpen, setIsRedeemModalOpen] = useState(false);
   const [isGenerateModalOpen, setIsGenerateModalOpen] = useState(false);
+  const [isCampaignModalOpen, setIsCampaignModalOpen] = useState(false);
+  const [campaignName, setCampaignName] = useState("");
+  const [discountValue, setDiscountValue] = useState("");
+  const [expirationDate, setExpirationDate] = useState("");
+  const [selectedCampaign, setSelectedCampaign] = useState("all");
   const { toast } = useToast();
 
   // Fetch all promo codes
@@ -28,8 +33,48 @@ export default function Home() {
   });
 
   // Fetch stats
-  const { data: stats = { total: 0, used: 0, available: 0 } } = useQuery<{ total: number; used: number; available: number }>({
+  const { data: stats = { total: 0, used: 0, available: 0, expired: 0 } } = useQuery<{ total: number; used: number; available: number; expired: number }>({
     queryKey: ["/api/promo-codes/stats"],
+  });
+
+  // Fetch campaigns
+  const { data: campaigns = [] } = useQuery<string[]>({
+    queryKey: ["/api/campaigns"],
+  });
+
+  // Generate campaign codes mutation
+  const generateCampaignMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("POST", "/api/promo-codes/generate-campaign", {
+        campaignName,
+        discountValue,
+        count: bulkCount,
+        format: codeFormat,
+        expiresAt: expirationDate ? new Date(expirationDate).toISOString() : undefined,
+      });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/promo-codes"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/promo-codes/stats"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/campaigns"] });
+      setIsCampaignModalOpen(false);
+      setCampaignName("");
+      setDiscountValue("");
+      setExpirationDate("");
+      setBulkCount(5);
+      toast({
+        title: "Campaign Created",
+        description: `${bulkCount} promo codes generated for campaign "${campaignName}"!`,
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to create campaign",
+        variant: "destructive",
+      });
+    },
   });
 
   // Generate single code mutation
@@ -37,6 +82,9 @@ export default function Home() {
     mutationFn: async () => {
       const response = await apiRequest("POST", "/api/promo-codes/generate", {
         format: codeFormat,
+        campaignName: campaignName || undefined,
+        discountValue: discountValue || undefined,
+        expiresAt: expirationDate ? new Date(expirationDate).toISOString() : undefined,
       });
       return response.json();
     },
@@ -63,6 +111,9 @@ export default function Home() {
       const response = await apiRequest("POST", "/api/promo-codes/generate-bulk", {
         count: bulkCount,
         format: codeFormat,
+        campaignName: campaignName || undefined,
+        discountValue: discountValue || undefined,
+        expiresAt: expirationDate ? new Date(expirationDate).toISOString() : undefined,
       });
       return response.json();
     },
@@ -129,11 +180,13 @@ export default function Home() {
     },
   });
 
-  // Filter codes based on search and status
+  // Filter codes based on search, status, and campaign
   const filteredCodes = codes.filter((code: PromoCode) => {
-    const matchesSearch = code.code.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearch = code.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (code.campaignName && code.campaignName.toLowerCase().includes(searchTerm.toLowerCase()));
     const matchesStatus = statusFilter === "all" || code.status === statusFilter;
-    return matchesSearch && matchesStatus;
+    const matchesCampaign = selectedCampaign === "all" || code.campaignName === selectedCampaign;
+    return matchesSearch && matchesStatus && matchesCampaign;
   });
 
   // Copy to clipboard
@@ -175,75 +228,143 @@ export default function Home() {
               </div>
             </div>
             <div className="flex items-center space-x-4">
-              {/* Generate Code Dialog */}
-              <Dialog open={isGenerateModalOpen} onOpenChange={setIsGenerateModalOpen}>
-                <DialogTrigger asChild>
-                  <Button className="bg-primary hover:bg-blue-700">
-                    <Plus className="mr-2 h-4 w-4" />
-                    Generate Code
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="sm:max-w-md">
-                  <DialogHeader>
-                    <DialogTitle>Generate Promo Codes</DialogTitle>
-                  </DialogHeader>
-                  <div className="space-y-6">
-                    {/* Code Format */}
-                    <div>
-                      <Label htmlFor="codeFormat">Code Format</Label>
-                      <Select value={codeFormat} onValueChange={setCodeFormat}>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="PROMO-XXXX">PROMO-XXXX (8 chars)</SelectItem>
-                          <SelectItem value="SAVE-XXXX-XX">SAVE-XXXX-XX (10 chars)</SelectItem>
-                          <SelectItem value="DISCOUNT-XXXXXX">DISCOUNT-XXXXXX (14 chars)</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    {/* Generation Options */}
-                    <div className="flex space-x-3">
+              {/* Generate Code Button with Dropdown */}
+              <div className="flex items-center space-x-2">
+                <Dialog open={isGenerateModalOpen} onOpenChange={setIsGenerateModalOpen}>
+                  <DialogTrigger asChild>
+                    <Button className="bg-primary hover:bg-blue-700">
+                      <Plus className="mr-2 h-4 w-4" />
+                      Quick Generate
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                      <DialogTitle>Quick Code Generation</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <Label>Format</Label>
+                          <Select value={codeFormat} onValueChange={setCodeFormat}>
+                            <SelectTrigger className="h-8">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="PROMO-XXXX">PROMO-XXXX</SelectItem>
+                              <SelectItem value="SAVE-XXXX-XX">SAVE-XXXX-XX</SelectItem>
+                              <SelectItem value="DISCOUNT-XXXXXX">DISCOUNT-XXXXXX</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label>Count</Label>
+                          <Input
+                            type="number"
+                            min="1"
+                            max="20"
+                            value={bulkCount}
+                            onChange={(e) => setBulkCount(Number(e.target.value))}
+                            className="h-8"
+                          />
+                        </div>
+                      </div>
                       <Button
                         onClick={() => {
-                          generateSingleMutation.mutate();
+                          if (bulkCount === 1) {
+                            generateSingleMutation.mutate();
+                          } else {
+                            generateBulkMutation.mutate();
+                          }
                           setIsGenerateModalOpen(false);
                         }}
-                        disabled={generateSingleMutation.isPending}
-                        className="flex-1 bg-primary hover:bg-blue-700"
+                        disabled={generateSingleMutation.isPending || generateBulkMutation.isPending}
+                        className="w-full bg-primary hover:bg-blue-700"
                       >
-                        Generate 1 Code
+                        Generate {bulkCount} Code{bulkCount > 1 ? 's' : ''}
                       </Button>
-                      <div className="border-l border-gray-200 px-3">
-                        <div className="flex items-center space-x-2 mb-2">
-                          <Label htmlFor="bulkCount" className="text-sm">Count:</Label>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+                
+                <Dialog open={isCampaignModalOpen} onOpenChange={setIsCampaignModalOpen}>
+                  <DialogTrigger asChild>
+                    <Button variant="outline" className="border-secondary text-secondary hover:bg-secondary hover:text-white">
+                      <Layers className="mr-2 h-4 w-4" />
+                      New Campaign
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="sm:max-w-lg">
+                    <DialogHeader>
+                      <DialogTitle>Create Promotional Campaign</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <Label htmlFor="campaignName">Campaign Name *</Label>
                           <Input
-                            id="bulkCount"
+                            id="campaignName"
+                            placeholder="Summer Sale 2025"
+                            value={campaignName}
+                            onChange={(e) => setCampaignName(e.target.value)}
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="discountValue">Discount Value *</Label>
+                          <Input
+                            id="discountValue"
+                            placeholder="20% off, $10 off, etc."
+                            value={discountValue}
+                            onChange={(e) => setDiscountValue(e.target.value)}
+                          />
+                        </div>
+                      </div>
+                      
+                      <div className="grid grid-cols-3 gap-3">
+                        <div>
+                          <Label>Code Format</Label>
+                          <Select value={codeFormat} onValueChange={setCodeFormat}>
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="PROMO-XXXX">PROMO-XXXX</SelectItem>
+                              <SelectItem value="SAVE-XXXX-XX">SAVE-XXXX-XX</SelectItem>
+                              <SelectItem value="DISCOUNT-XXXXXX">DISCOUNT-XXXXXX</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label>Quantity</Label>
+                          <Input
                             type="number"
-                            min="2"
+                            min="1"
                             max="100"
                             value={bulkCount}
                             onChange={(e) => setBulkCount(Number(e.target.value))}
-                            className="w-16 h-8 text-center"
                           />
                         </div>
-                        <Button
-                          onClick={() => {
-                            generateBulkMutation.mutate();
-                            setIsGenerateModalOpen(false);
-                          }}
-                          disabled={generateBulkMutation.isPending}
-                          className="w-full bg-secondary hover:bg-green-700"
-                        >
-                          <Layers className="mr-2 h-4 w-4" />
-                          Generate Bulk
-                        </Button>
+                        <div>
+                          <Label>Expires (Optional)</Label>
+                          <Input
+                            type="date"
+                            value={expirationDate}
+                            onChange={(e) => setExpirationDate(e.target.value)}
+                          />
+                        </div>
                       </div>
+                      
+                      <Button
+                        onClick={() => generateCampaignMutation.mutate()}
+                        disabled={!campaignName || !discountValue || generateCampaignMutation.isPending}
+                        className="w-full bg-secondary hover:bg-green-700"
+                      >
+                        <Layers className="mr-2 h-4 w-4" />
+                        Create Campaign ({bulkCount} codes)
+                      </Button>
                     </div>
-                  </div>
-                </DialogContent>
-              </Dialog>
+                  </DialogContent>
+                </Dialog>
+              </div>
             </div>
           </div>
         </div>
@@ -315,12 +436,27 @@ export default function Home() {
                       <div className="relative">
                         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                         <Input
-                          placeholder="Search codes..."
+                          placeholder="Search codes or campaigns..."
                           value={searchTerm}
                           onChange={(e) => setSearchTerm(e.target.value)}
                           className="pl-10 w-full sm:w-64"
                         />
                       </div>
+                      
+                      {/* Campaign Filter */}
+                      <Select value={selectedCampaign} onValueChange={setSelectedCampaign}>
+                        <SelectTrigger className="w-full sm:w-40">
+                          <SelectValue placeholder="All Campaigns" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All Campaigns</SelectItem>
+                          {campaigns.map((campaign) => (
+                            <SelectItem key={campaign} value={campaign}>
+                              {campaign}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                       
                       {/* Status Filter */}
                       <Select value={statusFilter} onValueChange={setStatusFilter}>
@@ -329,30 +465,35 @@ export default function Home() {
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="all">All Status</SelectItem>
-                          <SelectItem value="unused">Unused Only</SelectItem>
-                          <SelectItem value="used">Used Only</SelectItem>
+                          <SelectItem value="unused">Available</SelectItem>
+                          <SelectItem value="used">Redeemed</SelectItem>
+                          <SelectItem value="expired">Expired</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
                   </div>
                   
                   {/* Statistics Overview */}
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-4 border-t border-gray-200">
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 pt-4 border-t border-gray-200">
                     <div className="text-center p-3 bg-blue-50 rounded-lg">
-                      <div className="text-2xl font-bold text-blue-600">{stats.total}</div>
-                      <div className="text-sm text-blue-700">Total Codes</div>
+                      <div className="text-xl font-bold text-blue-600">{stats.total}</div>
+                      <div className="text-xs text-blue-700">Total Generated</div>
                     </div>
                     <div className="text-center p-3 bg-green-50 rounded-lg">
-                      <div className="text-2xl font-bold text-green-600">{stats.available}</div>
-                      <div className="text-sm text-green-700">Available</div>
+                      <div className="text-xl font-bold text-green-600">{stats.available}</div>
+                      <div className="text-xs text-green-700">Available</div>
                     </div>
                     <div className="text-center p-3 bg-red-50 rounded-lg">
-                      <div className="text-2xl font-bold text-red-600">{stats.used}</div>
-                      <div className="text-sm text-red-700">Used</div>
+                      <div className="text-xl font-bold text-red-600">{stats.used}</div>
+                      <div className="text-xs text-red-700">Redeemed</div>
+                    </div>
+                    <div className="text-center p-3 bg-orange-50 rounded-lg">
+                      <div className="text-xl font-bold text-orange-600">{stats.expired}</div>
+                      <div className="text-xs text-orange-700">Expired</div>
                     </div>
                     <div className="text-center p-3 bg-gray-50 rounded-lg">
-                      <div className="text-2xl font-bold text-gray-600">{stats.used > 0 ? Math.round((stats.used / stats.total) * 100) : 0}%</div>
-                      <div className="text-sm text-gray-700">Usage Rate</div>
+                      <div className="text-xl font-bold text-gray-600">{stats.used > 0 ? Math.round((stats.used / stats.total) * 100) : 0}%</div>
+                      <div className="text-xs text-gray-700">Redemption Rate</div>
                     </div>
                   </div>
                 </div>
@@ -364,79 +505,103 @@ export default function Home() {
                   <table className="w-full">
                     <thead className="bg-gray-50 border-b border-gray-200">
                       <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Code</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Used Date</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Code</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Campaign</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Discount</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Expires</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200">
                       {isLoadingCodes ? (
                         <tr>
-                          <td colSpan={5} className="px-6 py-4 text-center text-gray-500">
+                          <td colSpan={7} className="px-4 py-4 text-center text-gray-500">
                             Loading codes...
                           </td>
                         </tr>
                       ) : filteredCodes.length === 0 ? (
                         <tr>
-                          <td colSpan={5} className="px-6 py-4 text-center text-gray-500">
-                            {codes.length === 0 ? "No codes generated yet" : "No codes match your filters"}
+                          <td colSpan={7} className="px-4 py-4 text-center text-gray-500">
+                            {codes.length === 0 ? "No codes generated yet. Create your first campaign!" : "No codes match your filters"}
                           </td>
                         </tr>
                       ) : (
-                        filteredCodes.map((code: PromoCode) => (
-                          <tr key={code.id} className="hover:bg-gray-50">
-                            <td className="px-6 py-4">
-                              <div className="flex items-center space-x-3">
-                                <span className="font-mono text-sm font-medium text-gray-900">
-                                  {code.code}
-                                </span>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => copyToClipboard(code.code)}
-                                  className="p-1 h-auto text-gray-400 hover:text-gray-600"
-                                >
-                                  <Copy className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            </td>
-                            <td className="px-6 py-4">
-                              <Badge
-                                variant={code.status === "unused" ? "default" : "secondary"}
-                                className={
-                                  code.status === "unused"
-                                    ? "bg-green-100 text-green-800 hover:bg-green-100"
-                                    : "bg-red-100 text-red-800 hover:bg-red-100"
+                        filteredCodes.map((code: PromoCode) => {
+                          const isExpired = code.expiresAt && new Date(code.expiresAt) < new Date();
+                          const effectiveStatus = isExpired && code.status === "unused" ? "expired" : code.status;
+                          
+                          return (
+                            <tr key={code.id} className="hover:bg-gray-50">
+                              <td className="px-4 py-3">
+                                <div className="flex items-center space-x-2">
+                                  <span className="font-mono text-sm font-medium text-gray-900">
+                                    {code.code}
+                                  </span>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => copyToClipboard(code.code)}
+                                    className="p-1 h-auto text-gray-400 hover:text-gray-600"
+                                  >
+                                    <Copy className="h-3 w-3" />
+                                  </Button>
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 text-sm text-gray-600">
+                                {code.campaignName || 
+                                  <span className="text-gray-400 italic">No campaign</span>
                                 }
-                              >
-                                {code.status === "unused" ? "Unused" : "Used"}
-                              </Badge>
-                            </td>
-                            <td className="px-6 py-4 text-sm text-gray-600">
-                              {formatDate(code.createdAt.toString())}
-                            </td>
-                            <td className="px-6 py-4 text-sm text-gray-400">
-                              {formatDate(code.usedAt?.toString() || null)}
-                            </td>
-                            <td className="px-6 py-4">
-                              {code.status === "unused" ? (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => markAsUsedMutation.mutate(code.code)}
-                                  disabled={markAsUsedMutation.isPending}
-                                  className="text-accent hover:text-orange-700 p-0 h-auto"
+                              </td>
+                              <td className="px-4 py-3 text-sm text-gray-600">
+                                {code.discountValue || 
+                                  <span className="text-gray-400">-</span>
+                                }
+                              </td>
+                              <td className="px-4 py-3">
+                                <Badge
+                                  variant={effectiveStatus === "unused" ? "default" : "secondary"}
+                                  className={
+                                    effectiveStatus === "unused"
+                                      ? "bg-green-100 text-green-800 hover:bg-green-100"
+                                      : effectiveStatus === "used"
+                                      ? "bg-blue-100 text-blue-800 hover:bg-blue-100"
+                                      : "bg-orange-100 text-orange-800 hover:bg-orange-100"
+                                  }
                                 >
-                                  Mark as Used
-                                </Button>
-                              ) : (
-                                <span className="text-gray-400 text-sm">Redeemed</span>
-                              )}
-                            </td>
-                          </tr>
-                        ))
+                                  {effectiveStatus === "unused" ? "Available" : 
+                                   effectiveStatus === "used" ? "Redeemed" : "Expired"}
+                                </Badge>
+                              </td>
+                              <td className="px-4 py-3 text-sm text-gray-600">
+                                {code.expiresAt ? formatDate(code.expiresAt.toString()) : 
+                                  <span className="text-gray-400">No expiry</span>
+                                }
+                              </td>
+                              <td className="px-4 py-3 text-sm text-gray-600">
+                                {formatDate(code.createdAt.toString())}
+                              </td>
+                              <td className="px-4 py-3">
+                                {effectiveStatus === "unused" ? (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => markAsUsedMutation.mutate(code.code)}
+                                    disabled={markAsUsedMutation.isPending}
+                                    className="text-accent hover:text-orange-700 p-0 h-auto text-xs"
+                                  >
+                                    Mark Used
+                                  </Button>
+                                ) : (
+                                  <span className="text-gray-400 text-xs">
+                                    {effectiveStatus === "used" ? formatDate(code.usedAt?.toString() || null) : "Expired"}
+                                  </span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })
                       )}
                     </tbody>
                   </table>

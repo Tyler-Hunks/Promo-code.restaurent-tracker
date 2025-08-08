@@ -12,7 +12,10 @@ export const users = pgTable("users", {
 export const promoCodes = pgTable("promo_codes", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   code: text("code").notNull().unique(),
-  status: text("status", { enum: ["unused", "used"] }).notNull().default("unused"),
+  status: text("status", { enum: ["unused", "used", "expired"] }).notNull().default("unused"),
+  campaignName: text("campaign_name"),
+  discountValue: text("discount_value"),
+  expiresAt: timestamp("expires_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   usedAt: timestamp("used_at"),
 });
@@ -24,11 +27,25 @@ export const insertUserSchema = createInsertSchema(users).pick({
 
 export const insertPromoCodeSchema = createInsertSchema(promoCodes).pick({
   code: true,
+  campaignName: true,
+  discountValue: true,
+  expiresAt: true,
 });
 
 export const bulkGenerateSchema = z.object({
   count: z.number().min(1).max(100),
   format: z.enum(["PROMO-XXXX", "SAVE-XXXX-XX", "DISCOUNT-XXXXXX"]).default("PROMO-XXXX"),
+  campaignName: z.string().optional(),
+  discountValue: z.string().optional(),
+  expiresAt: z.string().datetime().optional(),
+});
+
+export const campaignGenerateSchema = z.object({
+  campaignName: z.string().min(1),
+  discountValue: z.string().min(1),
+  count: z.number().min(1).max(100),
+  format: z.enum(["PROMO-XXXX", "SAVE-XXXX-XX", "DISCOUNT-XXXXXX"]).default("PROMO-XXXX"),
+  expiresAt: z.string().datetime().optional(),
 });
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -36,3 +53,4 @@ export type User = typeof users.$inferSelect;
 export type InsertPromoCode = z.infer<typeof insertPromoCodeSchema>;
 export type PromoCode = typeof promoCodes.$inferSelect;
 export type BulkGenerate = z.infer<typeof bulkGenerateSchema>;
+export type CampaignGenerate = z.infer<typeof campaignGenerateSchema>;

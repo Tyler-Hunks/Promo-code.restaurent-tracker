@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertPromoCodeSchema, bulkGenerateSchema, type BulkGenerate } from "@shared/schema";
+import { insertPromoCodeSchema, bulkGenerateSchema, campaignGenerateSchema, type BulkGenerate, type CampaignGenerate } from "@shared/schema";
 
 function generateCode(format: string = "PROMO-XXXX"): string {
   const characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
@@ -52,15 +52,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Generate a single promo code
   app.post("/api/promo-codes/generate", async (req, res) => {
     try {
-      const { format = "PROMO-XXXX" } = req.body;
+      const { format = "PROMO-XXXX", campaignName, discountValue, expiresAt } = req.body;
       const code = await generateUniqueCode(format);
       
-      const validation = insertPromoCodeSchema.safeParse({ code });
+      const validation = insertPromoCodeSchema.safeParse({ 
+        code, 
+        campaignName, 
+        discountValue, 
+        expiresAt 
+      });
       if (!validation.success) {
         return res.status(400).json({ message: "Invalid code format" });
       }
 
-      const promoCode = await storage.createPromoCode({ code });
+      const promoCode = await storage.createPromoCode({ 
+        code, 
+        campaignName, 
+        discountValue, 
+        expiresAt 
+      });
       res.json(promoCode);
     } catch (error) {
       res.status(500).json({ 
@@ -77,7 +87,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Invalid bulk generation parameters" });
       }
 
-      const { count, format } = validation.data;
+      const { count, format, campaignName, discountValue, expiresAt } = validation.data;
       const codes: string[] = [];
 
       // Generate unique codes
@@ -86,7 +96,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         codes.push(code);
       }
 
-      const insertData = codes.map(code => ({ code }));
+      const insertData = codes.map(code => ({ 
+        code, 
+        campaignName, 
+        discountValue, 
+        expiresAt: expiresAt ? new Date(expiresAt) : undefined 
+      }));
       const promoCodes = await storage.createBulkPromoCodes(insertData);
       res.json(promoCodes);
     } catch (error) {
@@ -112,6 +127,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Generate campaign codes
+  app.post("/api/promo-codes/generate-campaign", async (req, res) => {
+    try {
+      const validation = campaignGenerateSchema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({ message: "Invalid campaign parameters" });
+      }
+
+      const { campaignName, discountValue, count, format, expiresAt } = validation.data;
+      const codes: string[] = [];
+
+      // Generate unique codes
+      for (let i = 0; i < count; i++) {
+        const code = await generateUniqueCode(format);
+        codes.push(code);
+      }
+
+      const insertData = codes.map(code => ({ 
+        code, 
+        campaignName, 
+        discountValue, 
+        expiresAt: expiresAt ? new Date(expiresAt) : undefined 
+      }));
+      const promoCodes = await storage.createBulkPromoCodes(insertData);
+      res.json(promoCodes);
+    } catch (error) {
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : "Failed to generate campaign codes" 
+      });
+    }
+  });
+
+  // Get campaigns
+  app.get("/api/campaigns", async (req, res) => {
+    try {
+      const campaigns = await storage.getCampaigns();
+      res.json(campaigns);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch campaigns" });
+    }
+  });
+
   // Validate a promo code
   app.get("/api/promo-codes/:code/validate", async (req, res) => {
     try {
@@ -122,9 +179,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Promo code not found" });
       }
 
+      // Check if expired
+      const now = new Date();
+      const isExpired = promoCode.expiresAt && promoCode.expiresAt < now;
+      const isValid = promoCode.status === "unused" && !isExpired;
+
       res.json({ 
-        valid: promoCode.status === "unused",
-        status: promoCode.status,
+        valid: isValid,
+        status: isExpired ? "expired" : promoCode.status,
         promoCode 
       });
     } catch (error) {

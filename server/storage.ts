@@ -12,7 +12,8 @@ export interface IStorage {
   createPromoCode(promoCode: InsertPromoCode): Promise<PromoCode>;
   createBulkPromoCodes(promoCodes: InsertPromoCode[]): Promise<PromoCode[]>;
   markPromoCodeAsUsed(code: string): Promise<PromoCode | undefined>;
-  getPromoCodeStats(): Promise<{ total: number; used: number; available: number }>;
+  getPromoCodeStats(): Promise<{ total: number; used: number; available: number; expired: number }>;
+  getCampaigns(): Promise<string[]>;
 }
 
 export class MemStorage implements IStorage {
@@ -59,6 +60,9 @@ export class MemStorage implements IStorage {
       ...insertPromoCode,
       id,
       status: "unused",
+      campaignName: insertPromoCode.campaignName || null,
+      discountValue: insertPromoCode.discountValue || null,
+      expiresAt: insertPromoCode.expiresAt ? new Date(insertPromoCode.expiresAt) : null,
       createdAt: new Date(),
       usedAt: null,
     };
@@ -75,6 +79,9 @@ export class MemStorage implements IStorage {
         ...insertPromoCode,
         id,
         status: "unused",
+        campaignName: insertPromoCode.campaignName || null,
+        discountValue: insertPromoCode.discountValue || null,
+        expiresAt: insertPromoCode.expiresAt ? new Date(insertPromoCode.expiresAt) : null,
         createdAt: new Date(),
         usedAt: null,
       };
@@ -101,13 +108,37 @@ export class MemStorage implements IStorage {
     return updatedPromoCode;
   }
 
-  async getPromoCodeStats(): Promise<{ total: number; used: number; available: number }> {
+  async getPromoCodeStats(): Promise<{ total: number; used: number; available: number; expired: number }> {
     const allCodes = Array.from(this.promoCodes.values());
-    const total = allCodes.length;
-    const used = allCodes.filter(code => code.status === "used").length;
-    const available = total - used;
+    const now = new Date();
+    
+    // Check for expired codes
+    const expiredCodes = allCodes.filter(code => 
+      code.expiresAt && code.expiresAt < now && code.status === "unused"
+    );
+    
+    // Update expired codes
+    for (const code of expiredCodes) {
+      const updatedCode = { ...code, status: "expired" as const };
+      this.promoCodes.set(code.id, updatedCode);
+    }
+    
+    const updatedCodes = Array.from(this.promoCodes.values());
+    const total = updatedCodes.length;
+    const used = updatedCodes.filter(code => code.status === "used").length;
+    const expired = updatedCodes.filter(code => code.status === "expired").length;
+    const available = total - used - expired;
 
-    return { total, used, available };
+    return { total, used, available, expired };
+  }
+
+  async getCampaigns(): Promise<string[]> {
+    const allCodes = Array.from(this.promoCodes.values());
+    const uniqueNames = new Set(allCodes
+      .map(code => code.campaignName)
+      .filter(name => name !== null && name !== undefined)
+    );
+    return Array.from(uniqueNames) as string[];
   }
 }
 
