@@ -1,0 +1,137 @@
+import type { Express } from "express";
+import { createServer, type Server } from "http";
+import { storage } from "./storage";
+import { insertPromoCodeSchema, bulkGenerateSchema, type BulkGenerate } from "@shared/schema";
+
+function generateCode(format: string = "PROMO-XXXX"): string {
+  const characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  
+  return format.replace(/X/g, () => {
+    return characters.charAt(Math.floor(Math.random() * characters.length));
+  });
+}
+
+async function generateUniqueCode(format: string = "PROMO-XXXX"): Promise<string> {
+  let code: string;
+  let attempts = 0;
+  const maxAttempts = 100;
+
+  do {
+    code = generateCode(format);
+    attempts++;
+    
+    if (attempts > maxAttempts) {
+      throw new Error("Unable to generate unique code after maximum attempts");
+    }
+  } while (await storage.getPromoCodeByCode(code));
+
+  return code;
+}
+
+export async function registerRoutes(app: Express): Promise<Server> {
+  // Get all promo codes
+  app.get("/api/promo-codes", async (req, res) => {
+    try {
+      const codes = await storage.getAllPromoCodes();
+      res.json(codes);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch promo codes" });
+    }
+  });
+
+  // Get promo code stats
+  app.get("/api/promo-codes/stats", async (req, res) => {
+    try {
+      const stats = await storage.getPromoCodeStats();
+      res.json(stats);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch stats" });
+    }
+  });
+
+  // Generate a single promo code
+  app.post("/api/promo-codes/generate", async (req, res) => {
+    try {
+      const { format = "PROMO-XXXX" } = req.body;
+      const code = await generateUniqueCode(format);
+      
+      const validation = insertPromoCodeSchema.safeParse({ code });
+      if (!validation.success) {
+        return res.status(400).json({ message: "Invalid code format" });
+      }
+
+      const promoCode = await storage.createPromoCode({ code });
+      res.json(promoCode);
+    } catch (error) {
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : "Failed to generate promo code" 
+      });
+    }
+  });
+
+  // Generate bulk promo codes
+  app.post("/api/promo-codes/generate-bulk", async (req, res) => {
+    try {
+      const validation = bulkGenerateSchema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({ message: "Invalid bulk generation parameters" });
+      }
+
+      const { count, format } = validation.data;
+      const codes: string[] = [];
+
+      // Generate unique codes
+      for (let i = 0; i < count; i++) {
+        const code = await generateUniqueCode(format);
+        codes.push(code);
+      }
+
+      const insertData = codes.map(code => ({ code }));
+      const promoCodes = await storage.createBulkPromoCodes(insertData);
+      res.json(promoCodes);
+    } catch (error) {
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : "Failed to generate bulk promo codes" 
+      });
+    }
+  });
+
+  // Mark a promo code as used
+  app.patch("/api/promo-codes/:code/redeem", async (req, res) => {
+    try {
+      const { code } = req.params;
+      const promoCode = await storage.markPromoCodeAsUsed(code);
+      
+      if (!promoCode) {
+        return res.status(404).json({ message: "Promo code not found or already used" });
+      }
+
+      res.json(promoCode);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to redeem promo code" });
+    }
+  });
+
+  // Validate a promo code
+  app.get("/api/promo-codes/:code/validate", async (req, res) => {
+    try {
+      const { code } = req.params;
+      const promoCode = await storage.getPromoCodeByCode(code);
+      
+      if (!promoCode) {
+        return res.status(404).json({ message: "Promo code not found" });
+      }
+
+      res.json({ 
+        valid: promoCode.status === "unused",
+        status: promoCode.status,
+        promoCode 
+      });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to validate promo code" });
+    }
+  });
+
+  const httpServer = createServer(app);
+  return httpServer;
+}
