@@ -1,7 +1,22 @@
-import type { Express } from "express";
+import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertPromoCodeSchema, bulkGenerateSchema, campaignGenerateSchema, type BulkGenerate, type CampaignGenerate } from "@shared/schema";
+
+// API Key Authentication Middleware
+function requireApiKey(req: Request, res: Response, next: NextFunction) {
+  const apiKey = req.headers['x-api-key'];
+  const expectedApiKey = process.env.API_KEY || 'promo-manager-2024-secure-key';
+  
+  if (!apiKey || apiKey !== expectedApiKey) {
+    return res.status(401).json({ 
+      message: 'Unauthorized: Valid API key required',
+      hint: 'Include x-api-key header with your request'
+    });
+  }
+  
+  next();
+}
 
 function generateCode(format: string = "PROMO-XXXX"): string {
   const characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
@@ -29,6 +44,9 @@ async function generateUniqueCode(format: string = "PROMO-XXXX"): Promise<string
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Apply API key authentication to all API routes
+  app.use('/api', requireApiKey);
+
   // Get all promo codes
   app.get("/api/promo-codes", async (req, res) => {
     try {
@@ -191,6 +209,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error) {
       res.status(500).json({ message: "Failed to validate promo code" });
+    }
+  });
+
+  // Delete a promo code
+  app.delete("/api/promo-codes/:code", async (req, res) => {
+    try {
+      const { code } = req.params;
+      const deleted = await storage.deletePromoCode(code);
+      
+      if (!deleted) {
+        return res.status(404).json({ message: "Promo code not found" });
+      }
+
+      res.json({ message: "Promo code deleted successfully", code });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to delete promo code" });
+    }
+  });
+
+  // Delete multiple promo codes
+  app.delete("/api/promo-codes", async (req, res) => {
+    try {
+      const { codes } = req.body;
+      if (!Array.isArray(codes) || codes.length === 0) {
+        return res.status(400).json({ message: "Invalid codes array" });
+      }
+
+      const deletedCount = await storage.deleteBulkPromoCodes(codes);
+      res.json({ 
+        message: `${deletedCount} promo codes deleted successfully`, 
+        deletedCount 
+      });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to delete promo codes" });
     }
   });
 

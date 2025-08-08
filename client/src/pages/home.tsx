@@ -9,7 +9,9 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Copy, Ticket, Plus, Layers, Search } from "lucide-react";
+import { Copy, Ticket, Plus, Layers, Search, Trash2, AlertTriangle } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { Checkbox } from "@/components/ui/checkbox";
 import type { PromoCode, BulkGenerate, CampaignGenerate } from "@shared/schema";
 
 export default function Home() {
@@ -25,6 +27,9 @@ export default function Home() {
   const [discountValue, setDiscountValue] = useState("");
   const [expirationDate, setExpirationDate] = useState("");
   const [selectedCampaign, setSelectedCampaign] = useState("all");
+  const [selectedCodes, setSelectedCodes] = useState<string[]>([]);
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  const [codeToDelete, setCodeToDelete] = useState<string | null>(null);
   const { toast } = useToast();
 
   // Fetch all promo codes
@@ -180,6 +185,57 @@ export default function Home() {
     },
   });
 
+  // Delete single code mutation
+  const deleteCodeMutation = useMutation({
+    mutationFn: async (code: string) => {
+      const response = await apiRequest("DELETE", `/api/promo-codes/${code}`);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/promo-codes"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/promo-codes/stats"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/campaigns"] });
+      toast({
+        title: "Code Deleted",
+        description: "Promo code deleted successfully!",
+      });
+      setCodeToDelete(null);
+      setIsDeleteConfirmOpen(false);
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to delete promo code",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Delete multiple codes mutation
+  const deleteBulkMutation = useMutation({
+    mutationFn: async (codes: string[]) => {
+      const response = await apiRequest("DELETE", "/api/promo-codes", { codes });
+      return response.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/promo-codes"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/promo-codes/stats"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/campaigns"] });
+      toast({
+        title: "Codes Deleted",
+        description: `${data.deletedCount} promo codes deleted successfully!`,
+      });
+      setSelectedCodes([]);
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to delete selected promo codes",
+        variant: "destructive",
+      });
+    },
+  });
+
   // Filter codes based on search, status, and campaign
   const filteredCodes = codes.filter((code: PromoCode) => {
     const matchesSearch = code.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -210,6 +266,44 @@ export default function Home() {
   const formatDate = (date: string | null) => {
     if (!date) return "-";
     return new Date(date).toLocaleString();
+  };
+
+  // Handle select all/none for bulk delete
+  const handleSelectAll = () => {
+    if (selectedCodes.length === filteredCodes.length) {
+      setSelectedCodes([]);
+    } else {
+      setSelectedCodes(filteredCodes.map(code => code.code));
+    }
+  };
+
+  // Handle individual code selection
+  const handleCodeSelect = (code: string) => {
+    if (selectedCodes.includes(code)) {
+      setSelectedCodes(selectedCodes.filter(c => c !== code));
+    } else {
+      setSelectedCodes([...selectedCodes, code]);
+    }
+  };
+
+  // Handle delete confirmation
+  const handleDeleteCode = (code: string) => {
+    setCodeToDelete(code);
+    setIsDeleteConfirmOpen(true);
+  };
+
+  // Confirm delete single code
+  const confirmDeleteCode = () => {
+    if (codeToDelete) {
+      deleteCodeMutation.mutate(codeToDelete);
+    }
+  };
+
+  // Confirm delete selected codes
+  const confirmDeleteSelected = () => {
+    if (selectedCodes.length > 0) {
+      deleteBulkMutation.mutate(selectedCodes);
+    }
   };
 
   return (
@@ -499,12 +593,67 @@ export default function Home() {
                 </div>
               </CardHeader>
 
+              {/* Bulk Actions Bar */}
+              {selectedCodes.length > 0 && (
+                <div className="bg-blue-50 border-b border-blue-200 px-4 py-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      <span className="text-sm text-blue-800 font-medium">
+                        {selectedCodes.length} code{selectedCodes.length > 1 ? 's' : ''} selected
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setSelectedCodes([])}
+                        className="text-blue-600 hover:text-blue-800 p-0 h-auto text-xs"
+                      >
+                        Clear selection
+                      </Button>
+                    </div>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          disabled={deleteBulkMutation.isPending}
+                          className="bg-red-600 hover:bg-red-700"
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          Delete Selected ({selectedCodes.length})
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Delete Selected Codes</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Are you sure you want to delete {selectedCodes.length} promo code{selectedCodes.length > 1 ? 's' : ''}? This action cannot be undone.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction onClick={confirmDeleteSelected}>
+                            Delete {selectedCodes.length} Code{selectedCodes.length > 1 ? 's' : ''}
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </div>
+                </div>
+              )}
+
               {/* Codes Table */}
               <CardContent className="p-0">
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead className="bg-gray-50 border-b border-gray-200">
                       <tr>
+                        <th className="px-4 py-3 text-left">
+                          <Checkbox
+                            checked={filteredCodes.length > 0 && selectedCodes.length === filteredCodes.length}
+                            onCheckedChange={handleSelectAll}
+                            className="mr-2"
+                          />
+                        </th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Code</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Campaign</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Discount</th>
@@ -517,13 +666,13 @@ export default function Home() {
                     <tbody className="divide-y divide-gray-200">
                       {isLoadingCodes ? (
                         <tr>
-                          <td colSpan={7} className="px-4 py-4 text-center text-gray-500">
+                          <td colSpan={8} className="px-4 py-4 text-center text-gray-500">
                             Loading codes...
                           </td>
                         </tr>
                       ) : filteredCodes.length === 0 ? (
                         <tr>
-                          <td colSpan={7} className="px-4 py-4 text-center text-gray-500">
+                          <td colSpan={8} className="px-4 py-4 text-center text-gray-500">
                             {codes.length === 0 ? "No codes generated yet. Create your first campaign!" : "No codes match your filters"}
                           </td>
                         </tr>
@@ -534,6 +683,12 @@ export default function Home() {
                           
                           return (
                             <tr key={code.id} className="hover:bg-gray-50">
+                              <td className="px-4 py-3">
+                                <Checkbox
+                                  checked={selectedCodes.includes(code.code)}
+                                  onCheckedChange={() => handleCodeSelect(code.code)}
+                                />
+                              </td>
                               <td className="px-4 py-3">
                                 <div className="flex items-center space-x-2">
                                   <span className="font-mono text-sm font-medium text-gray-900">
@@ -583,21 +738,32 @@ export default function Home() {
                                 {formatDate(code.createdAt.toString())}
                               </td>
                               <td className="px-4 py-3">
-                                {effectiveStatus === "unused" ? (
+                                <div className="flex items-center space-x-2">
+                                  {effectiveStatus === "unused" ? (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => markAsUsedMutation.mutate(code.code)}
+                                      disabled={markAsUsedMutation.isPending}
+                                      className="text-accent hover:text-orange-700 p-0 h-auto text-xs"
+                                    >
+                                      Mark Used
+                                    </Button>
+                                  ) : (
+                                    <span className="text-gray-400 text-xs">
+                                      {effectiveStatus === "used" ? formatDate(code.usedAt?.toString() || null) : "Expired"}
+                                    </span>
+                                  )}
                                   <Button
                                     variant="ghost"
                                     size="sm"
-                                    onClick={() => markAsUsedMutation.mutate(code.code)}
-                                    disabled={markAsUsedMutation.isPending}
-                                    className="text-accent hover:text-orange-700 p-0 h-auto text-xs"
+                                    onClick={() => handleDeleteCode(code.code)}
+                                    disabled={deleteCodeMutation.isPending}
+                                    className="text-red-600 hover:text-red-800 p-0 h-auto"
                                   >
-                                    Mark Used
+                                    <Trash2 className="h-3 w-3" />
                                   </Button>
-                                ) : (
-                                  <span className="text-gray-400 text-xs">
-                                    {effectiveStatus === "used" ? formatDate(code.usedAt?.toString() || null) : "Expired"}
-                                  </span>
-                                )}
+                                </div>
                               </td>
                             </tr>
                           );
@@ -620,6 +786,32 @@ export default function Home() {
           </div>
         </div>
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={isDeleteConfirmOpen} onOpenChange={setIsDeleteConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center">
+              <AlertTriangle className="mr-2 h-5 w-5 text-red-600" />
+              Delete Promo Code
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete the promo code <strong>{codeToDelete}</strong>? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => { setCodeToDelete(null); setIsDeleteConfirmOpen(false); }}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={confirmDeleteCode}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Delete Code
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

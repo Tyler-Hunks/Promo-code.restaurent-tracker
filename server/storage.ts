@@ -12,6 +12,8 @@ export interface IStorage {
   createPromoCode(promoCode: InsertPromoCode): Promise<PromoCode>;
   createBulkPromoCodes(promoCodes: InsertPromoCode[]): Promise<PromoCode[]>;
   markPromoCodeAsUsed(code: string): Promise<PromoCode | undefined>;
+  deletePromoCode(code: string): Promise<boolean>;
+  deleteBulkPromoCodes(codes: string[]): Promise<number>;
   getPromoCodeStats(): Promise<{ total: number; used: number; available: number; expired: number }>;
   getCampaigns(): Promise<string[]>;
 }
@@ -130,6 +132,30 @@ export class MemStorage implements IStorage {
     const available = total - used - expired;
 
     return { total, used, available, expired };
+  }
+
+  async deletePromoCode(code: string): Promise<boolean> {
+    const promoCode = await this.getPromoCodeByCode(code);
+    if (!promoCode) {
+      return false;
+    }
+    
+    this.promoCodes.delete(promoCode.id);
+    return true;
+  }
+
+  async deleteBulkPromoCodes(codes: string[]): Promise<number> {
+    let deletedCount = 0;
+    
+    for (const code of codes) {
+      const promoCode = await this.getPromoCodeByCode(code);
+      if (promoCode) {
+        this.promoCodes.delete(promoCode.id);
+        deletedCount++;
+      }
+    }
+    
+    return deletedCount;
   }
 
   async getCampaigns(): Promise<string[]> {
