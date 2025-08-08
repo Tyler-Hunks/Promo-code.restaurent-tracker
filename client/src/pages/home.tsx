@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Copy, Ticket, Plus, Layers, Search } from "lucide-react";
-import type { PromoCode } from "@shared/schema";
+import type { PromoCode, BulkGenerate } from "@shared/schema";
 
 export default function Home() {
   const [searchTerm, setSearchTerm] = useState("");
@@ -19,15 +19,16 @@ export default function Home() {
   const [bulkCount, setBulkCount] = useState(5);
   const [redeemCode, setRedeemCode] = useState("");
   const [isRedeemModalOpen, setIsRedeemModalOpen] = useState(false);
+  const [isGenerateModalOpen, setIsGenerateModalOpen] = useState(false);
   const { toast } = useToast();
 
   // Fetch all promo codes
-  const { data: codes = [], isLoading: isLoadingCodes } = useQuery({
+  const { data: codes = [], isLoading: isLoadingCodes } = useQuery<PromoCode[]>({
     queryKey: ["/api/promo-codes"],
   });
 
   // Fetch stats
-  const { data: stats = { total: 0, used: 0, available: 0 } } = useQuery({
+  const { data: stats = { total: 0, used: 0, available: 0 } } = useQuery<{ total: number; used: number; available: number }>({
     queryKey: ["/api/promo-codes/stats"],
   });
 
@@ -91,8 +92,6 @@ export default function Home() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/promo-codes"] });
       queryClient.invalidateQueries({ queryKey: ["/api/promo-codes/stats"] });
-      setIsRedeemModalOpen(false);
-      setRedeemCode("");
       toast({
         title: "Code Redeemed",
         description: "Promo code marked as used successfully!",
@@ -176,12 +175,75 @@ export default function Home() {
               </div>
             </div>
             <div className="flex items-center space-x-4">
-              <div className="text-sm text-gray-600">
-                <span>{stats.total}</span> Total Codes
-              </div>
-              <div className="text-sm text-gray-600">
-                <span>{stats.used}</span> Used
-              </div>
+              {/* Generate Code Dialog */}
+              <Dialog open={isGenerateModalOpen} onOpenChange={setIsGenerateModalOpen}>
+                <DialogTrigger asChild>
+                  <Button className="bg-primary hover:bg-blue-700">
+                    <Plus className="mr-2 h-4 w-4" />
+                    Generate Code
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-md">
+                  <DialogHeader>
+                    <DialogTitle>Generate Promo Codes</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-6">
+                    {/* Code Format */}
+                    <div>
+                      <Label htmlFor="codeFormat">Code Format</Label>
+                      <Select value={codeFormat} onValueChange={setCodeFormat}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="PROMO-XXXX">PROMO-XXXX (8 chars)</SelectItem>
+                          <SelectItem value="SAVE-XXXX-XX">SAVE-XXXX-XX (10 chars)</SelectItem>
+                          <SelectItem value="DISCOUNT-XXXXXX">DISCOUNT-XXXXXX (14 chars)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Generation Options */}
+                    <div className="flex space-x-3">
+                      <Button
+                        onClick={() => {
+                          generateSingleMutation.mutate();
+                          setIsGenerateModalOpen(false);
+                        }}
+                        disabled={generateSingleMutation.isPending}
+                        className="flex-1 bg-primary hover:bg-blue-700"
+                      >
+                        Generate 1 Code
+                      </Button>
+                      <div className="border-l border-gray-200 px-3">
+                        <div className="flex items-center space-x-2 mb-2">
+                          <Label htmlFor="bulkCount" className="text-sm">Count:</Label>
+                          <Input
+                            id="bulkCount"
+                            type="number"
+                            min="2"
+                            max="100"
+                            value={bulkCount}
+                            onChange={(e) => setBulkCount(Number(e.target.value))}
+                            className="w-16 h-8 text-center"
+                          />
+                        </div>
+                        <Button
+                          onClick={() => {
+                            generateBulkMutation.mutate();
+                            setIsGenerateModalOpen(false);
+                          }}
+                          disabled={generateBulkMutation.isPending}
+                          className="w-full bg-secondary hover:bg-green-700"
+                        >
+                          <Layers className="mr-2 h-4 w-4" />
+                          Generate Bulk
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </DialogContent>
+              </Dialog>
             </div>
           </div>
         </div>
@@ -189,68 +251,42 @@ export default function Home() {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Code Generator */}
+          {/* Redeem Code Section */}
           <div className="lg:col-span-1">
             <Card>
               <CardHeader>
-                <CardTitle>Generate Codes</CardTitle>
+                <CardTitle>Redeem Code</CardTitle>
               </CardHeader>
               <CardContent className="space-y-6">
-                {/* Single Code Generation */}
+                {/* Redeem Code Form */}
                 <div className="space-y-4">
                   <div>
-                    <Label htmlFor="codeFormat">Code Format</Label>
-                    <Select value={codeFormat} onValueChange={setCodeFormat}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="PROMO-XXXX">PROMO-XXXX (8 chars)</SelectItem>
-                        <SelectItem value="SAVE-XXXX-XX">SAVE-XXXX-XX (10 chars)</SelectItem>
-                        <SelectItem value="DISCOUNT-XXXXXX">DISCOUNT-XXXXXX (14 chars)</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <Label htmlFor="redeemCode">Enter Promo Code</Label>
+                    <Input
+                      id="redeemCode"
+                      placeholder="PROMO-XXXX"
+                      value={redeemCode}
+                      onChange={(e) => setRedeemCode(e.target.value.toUpperCase())}
+                      className="font-mono"
+                    />
                   </div>
                   
                   <Button
-                    onClick={() => generateSingleMutation.mutate()}
-                    disabled={generateSingleMutation.isPending}
-                    className="w-full bg-primary hover:bg-blue-700"
+                    onClick={() => {
+                      redeemMutation.mutate(redeemCode);
+                      setRedeemCode("");
+                    }}
+                    disabled={!redeemCode || redeemMutation.isPending}
+                    className="w-full bg-accent hover:bg-orange-600"
                   >
-                    <Plus className="mr-2 h-4 w-4" />
-                    Generate Single Code
+                    <Ticket className="mr-2 h-4 w-4" />
+                    Redeem Code
                   </Button>
-                </div>
-
-                {/* Bulk Generation */}
-                <div className="border-t border-gray-200 pt-6">
-                  <h3 className="text-md font-medium text-gray-900 mb-4">Bulk Generation</h3>
-                  <div className="space-y-4">
-                    <div>
-                      <Label htmlFor="bulkCount">Number of Codes</Label>
-                      <Input
-                        id="bulkCount"
-                        type="number"
-                        min="1"
-                        max="100"
-                        value={bulkCount}
-                        onChange={(e) => setBulkCount(Number(e.target.value))}
-                      />
-                    </div>
-                    
-                    <Button
-                      onClick={() => generateBulkMutation.mutate()}
-                      disabled={generateBulkMutation.isPending}
-                      className="w-full bg-secondary hover:bg-green-700"
-                    >
-                      <Layers className="mr-2 h-4 w-4" />
-                      Generate Bulk Codes
-                    </Button>
-                  </div>
                 </div>
 
                 {/* Quick Stats */}
                 <div className="border-t border-gray-200 pt-6">
+                  <h3 className="text-md font-medium text-gray-900 mb-4">Quick Stats</h3>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="text-center p-3 bg-green-50 rounded-lg">
                       <div className="text-2xl font-bold text-green-600">{stats.available}</div>
@@ -270,74 +306,54 @@ export default function Home() {
           <div className="lg:col-span-2">
             <Card>
               <CardHeader>
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                  <CardTitle>Code Tracker</CardTitle>
-                  
-                  <div className="flex flex-col sm:flex-row gap-3">
-                    {/* Search */}
-                    <div className="relative">
-                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                      <Input
-                        placeholder="Search codes..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="pl-10 w-full sm:w-64"
-                      />
-                    </div>
+                <div className="flex flex-col gap-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                    <CardTitle>Code Tracker</CardTitle>
                     
-                    {/* Status Filter */}
-                    <Select value={statusFilter} onValueChange={setStatusFilter}>
-                      <SelectTrigger className="w-full sm:w-32">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Status</SelectItem>
-                        <SelectItem value="unused">Unused Only</SelectItem>
-                        <SelectItem value="used">Used Only</SelectItem>
-                      </SelectContent>
-                    </Select>
-
-                    {/* Redeem Code Dialog */}
-                    <Dialog open={isRedeemModalOpen} onOpenChange={setIsRedeemModalOpen}>
-                      <DialogTrigger asChild>
-                        <Button variant="outline" className="text-accent border-accent hover:bg-accent hover:text-white">
-                          Redeem Code
-                        </Button>
-                      </DialogTrigger>
-                      <DialogContent>
-                        <DialogHeader>
-                          <DialogTitle>Redeem Code</DialogTitle>
-                        </DialogHeader>
-                        <div className="space-y-4">
-                          <div>
-                            <Label htmlFor="redeemCode">Enter Promo Code</Label>
-                            <Input
-                              id="redeemCode"
-                              placeholder="PROMO-XXXX"
-                              value={redeemCode}
-                              onChange={(e) => setRedeemCode(e.target.value.toUpperCase())}
-                              className="font-mono"
-                            />
-                          </div>
-                          <div className="flex space-x-3">
-                            <Button
-                              variant="outline"
-                              onClick={() => setIsRedeemModalOpen(false)}
-                              className="flex-1"
-                            >
-                              Cancel
-                            </Button>
-                            <Button
-                              onClick={() => redeemMutation.mutate(redeemCode)}
-                              disabled={!redeemCode || redeemMutation.isPending}
-                              className="flex-1 bg-primary hover:bg-blue-700"
-                            >
-                              Redeem Code
-                            </Button>
-                          </div>
-                        </div>
-                      </DialogContent>
-                    </Dialog>
+                    <div className="flex flex-col sm:flex-row gap-3">
+                      {/* Search */}
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                        <Input
+                          placeholder="Search codes..."
+                          value={searchTerm}
+                          onChange={(e) => setSearchTerm(e.target.value)}
+                          className="pl-10 w-full sm:w-64"
+                        />
+                      </div>
+                      
+                      {/* Status Filter */}
+                      <Select value={statusFilter} onValueChange={setStatusFilter}>
+                        <SelectTrigger className="w-full sm:w-32">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All Status</SelectItem>
+                          <SelectItem value="unused">Unused Only</SelectItem>
+                          <SelectItem value="used">Used Only</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  
+                  {/* Statistics Overview */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-4 border-t border-gray-200">
+                    <div className="text-center p-3 bg-blue-50 rounded-lg">
+                      <div className="text-2xl font-bold text-blue-600">{stats.total}</div>
+                      <div className="text-sm text-blue-700">Total Codes</div>
+                    </div>
+                    <div className="text-center p-3 bg-green-50 rounded-lg">
+                      <div className="text-2xl font-bold text-green-600">{stats.available}</div>
+                      <div className="text-sm text-green-700">Available</div>
+                    </div>
+                    <div className="text-center p-3 bg-red-50 rounded-lg">
+                      <div className="text-2xl font-bold text-red-600">{stats.used}</div>
+                      <div className="text-sm text-red-700">Used</div>
+                    </div>
+                    <div className="text-center p-3 bg-gray-50 rounded-lg">
+                      <div className="text-2xl font-bold text-gray-600">{stats.used > 0 ? Math.round((stats.used / stats.total) * 100) : 0}%</div>
+                      <div className="text-sm text-gray-700">Usage Rate</div>
+                    </div>
                   </div>
                 </div>
               </CardHeader>
