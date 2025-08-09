@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Copy, Ticket, Plus, Layers, Search, Trash2, AlertTriangle } from "lucide-react";
+import { Copy, Ticket, Plus, Layers, Search, Trash2, AlertTriangle, Download } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { PromoCode, BulkGenerate, CampaignGenerate } from "@shared/schema";
@@ -306,6 +306,49 @@ export default function Home() {
     }
   };
 
+  // Download CSV functionality
+  const downloadCSV = () => {
+    // Prepare CSV data
+    const csvData = filteredCodes.map(code => ({
+      Code: code.code,
+      Status: code.status,
+      Campaign: code.campaignName || '',
+      'Discount Value': code.discountValue || '',
+      'Created At': formatDate(code.createdAt?.toISOString() || null),
+      'Used At': formatDate(code.usedAt?.toISOString() || null),
+      'Expires At': formatDate(code.expiresAt?.toISOString() || null)
+    }));
+
+    // Create CSV content
+    const headers = ['Code', 'Status', 'Campaign', 'Discount Value', 'Created At', 'Used At', 'Expires At'];
+    const csvContent = [
+      headers.join(','),
+      ...csvData.map(row => 
+        headers.map(header => {
+          const value = row[header as keyof typeof row] || '';
+          // Escape commas and quotes in values
+          return `"${String(value).replace(/"/g, '""')}"`;
+        }).join(',')
+      )
+    ].join('\n');
+
+    // Create and trigger download
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `promo-codes-${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    toast({
+      title: "CSV Downloaded",
+      description: `${filteredCodes.length} promo codes exported to CSV!`,
+    });
+  };
+
   return (
     <div className="bg-gray-50 min-h-screen">
       {/* Header */}
@@ -421,9 +464,11 @@ export default function Home() {
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="PROMO-XXXX">PROMO-XXXX</SelectItem>
-                              <SelectItem value="SAVE-XXXX-XX">SAVE-XXXX-XX</SelectItem>
-                              <SelectItem value="DISCOUNT-XXXXXX">DISCOUNT-XXXXXX</SelectItem>
+                              <SelectItem value="PROMO-XXXX">PROMO-XXXX (1.6M codes)</SelectItem>
+                              <SelectItem value="SAVE-XXXX-XX">SAVE-XXXX-XX (47M codes)</SelectItem>
+                              <SelectItem value="DISCOUNT-XXXXXX">DISCOUNT-XXXXXX (2.1B codes)</SelectItem>
+                              <SelectItem value="REST2024-XXXX">REST2024-XXXX (1.6M codes)</SelectItem>
+                              <SelectItem value="XXXXXXXXXX">XXXXXXXXXX (3.6Q codes)</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
@@ -564,6 +609,17 @@ export default function Home() {
                           <SelectItem value="expired">Expired</SelectItem>
                         </SelectContent>
                       </Select>
+                      
+                      {/* CSV Download Button */}
+                      <Button
+                        onClick={downloadCSV}
+                        variant="outline"
+                        disabled={filteredCodes.length === 0}
+                        className="border-green-300 text-green-600 hover:bg-green-50 hover:text-green-700"
+                      >
+                        <Download className="mr-2 h-4 w-4" />
+                        CSV ({filteredCodes.length})
+                      </Button>
                     </div>
                   </div>
                   
