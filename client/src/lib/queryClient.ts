@@ -13,7 +13,7 @@ export async function apiRequest(
   data?: unknown | undefined,
 ): Promise<Response> {
   const headers: Record<string, string> = {
-    'x-api-key': 'promo-manager-2024-secure-key', // API key for authentication
+    'x-api-key': import.meta.env.VITE_API_KEY || 'promo-manager-2024-secure-key', // API key for authentication
   };
   
   if (data) {
@@ -39,7 +39,7 @@ export const getQueryFn: <T>(options: {
   async ({ queryKey }) => {
     const res = await fetch(queryKey.join("/") as string, {
       headers: {
-        'x-api-key': 'promo-manager-2024-secure-key', // API key for authentication
+        'x-api-key': import.meta.env.VITE_API_KEY || 'promo-manager-2024-secure-key', // API key for authentication
       },
       credentials: "include",
     });
