@@ -25,13 +25,15 @@ Preferred communication style: Simple, everyday language.
 - **Build Process**: esbuild for production bundling
 
 ## Database Architecture
-- **Database**: PostgreSQL
-- **ORM**: Drizzle ORM with drizzle-kit for migrations
+- **Database**: PostgreSQL (Neon serverless) - ACTIVE PRODUCTION STORAGE
+- **ORM**: Drizzle ORM with drizzle-kit for schema management
 - **Connection**: Neon serverless PostgreSQL driver (@neondatabase/serverless)
 - **Schema Management**: Type-safe schema definitions with Zod validation
+- **Storage Implementation**: DatabaseStorage class replacing in-memory storage
 - **Tables**: 
   - Users table with UUID primary keys
-  - Promo codes table with status tracking and timestamps
+  - Promo codes table with status tracking, automatic expiration, and full campaign support
+- **Features**: Automatic expired code detection, bulk operations, CSV import/export
 
 ## Development Setup
 - **Development Server**: Vite dev server with HMR for frontend, tsx for backend hot reloading
@@ -40,10 +42,14 @@ Preferred communication style: Simple, everyday language.
 - **Path Aliases**: Configured for clean imports (@/ for client, @shared/ for shared code)
 
 ## Key Features
-- **Promo Code Generation**: Single and bulk generation with customizable formats
+- **Promo Code Generation**: Single and bulk generation with customizable formats (PROMO-XXXX to XXXXXXXXXX)
 - **Code Management**: View all codes with search and filtering capabilities
-- **Statistics Dashboard**: Real-time stats on total, used, and available codes
+- **Statistics Dashboard**: Real-time stats on total, used, available, and expired codes
 - **Code Redemption**: Mark codes as used with timestamp tracking
+- **CSV Operations**: Full export and import functionality for data migration
+- **Bulk Operations**: Multi-select deletion with confirmation dialogs
+- **Database Persistence**: PostgreSQL storage with automatic expiration handling
+- **API Authentication**: Secure API key protection on all endpoints
 - **Responsive Design**: Mobile-first design with shadcn/ui components
 
 ## External Dependencies

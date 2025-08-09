@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Copy, Ticket, Plus, Layers, Search, Trash2, AlertTriangle, Download } from "lucide-react";
+import { Copy, Ticket, Plus, Layers, Search, Trash2, AlertTriangle, Download, Upload } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { PromoCode, BulkGenerate, CampaignGenerate } from "@shared/schema";
@@ -30,6 +30,8 @@ export default function Home() {
   const [selectedCodes, setSelectedCodes] = useState<string[]>([]);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [codeToDelete, setCodeToDelete] = useState<string | null>(null);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
   const { toast } = useToast();
 
   // Fetch all promo codes
@@ -349,6 +351,91 @@ export default function Home() {
     });
   };
 
+  // CSV Import functionality
+  const importMutation = useMutation({
+    mutationFn: async (csvData: string) => {
+      // Parse CSV data
+      const lines = csvData.trim().split('\n');
+      const headers = lines[0].split(',').map(h => h.replace(/"/g, '').trim());
+      
+      const codes = lines.slice(1).map(line => {
+        const values = line.split(',').map(v => v.replace(/"/g, '').trim());
+        const codeData: any = {};
+        
+        headers.forEach((header, index) => {
+          const value = values[index] || '';
+          switch (header.toLowerCase()) {
+            case 'code':
+              codeData.code = value;
+              break;
+            case 'status':
+              codeData.status = value || 'unused';
+              break;
+            case 'campaign':
+              if (value) codeData.campaignName = value;
+              break;
+            case 'discount value':
+              if (value) codeData.discountValue = value;
+              break;
+            case 'used at':
+              if (value && value !== '-') codeData.usedAt = new Date(value).toISOString();
+              break;
+            case 'expires at':
+              if (value && value !== '-') codeData.expiresAt = new Date(value).toISOString();
+              break;
+          }
+        });
+        
+        return codeData;
+      }).filter(code => code.code); // Filter out empty codes
+
+      const response = await apiRequest("POST", "/api/promo-codes/import", { codes });
+      return response.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/promo-codes"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/promo-codes/stats"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/campaigns"] });
+      setIsImportModalOpen(false);
+      setImportFile(null);
+      toast({
+        title: "Import Successful",
+        description: `${data.imported} codes imported, ${data.skipped} skipped, ${data.errors.length} errors`,
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Import Failed",
+        description: "Failed to import CSV data. Please check the format.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file && file.type === 'text/csv') {
+      setImportFile(file);
+    } else {
+      toast({
+        title: "Invalid File",
+        description: "Please select a valid CSV file.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleImport = () => {
+    if (!importFile) return;
+    
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const csvData = e.target?.result as string;
+      importMutation.mutate(csvData);
+    };
+    reader.readAsText(importFile);
+  };
+
   return (
     <div className="bg-gray-50 min-h-screen">
       {/* Header */}
@@ -620,6 +707,58 @@ export default function Home() {
                         <Download className="mr-2 h-4 w-4" />
                         CSV ({filteredCodes.length})
                       </Button>
+                      
+                      {/* CSV Import Button */}
+                      <Dialog open={isImportModalOpen} onOpenChange={setIsImportModalOpen}>
+                        <DialogTrigger asChild>
+                          <Button
+                            variant="outline"
+                            className="border-blue-300 text-blue-600 hover:bg-blue-50 hover:text-blue-700"
+                          >
+                            <Upload className="mr-2 h-4 w-4" />
+                            Import CSV
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent className="sm:max-w-lg">
+                          <DialogHeader>
+                            <DialogTitle>Import Promo Codes from CSV</DialogTitle>
+                          </DialogHeader>
+                          <div className="space-y-4">
+                            <div className="text-sm text-gray-600">
+                              <p>Upload a CSV file with promo codes. Expected format:</p>
+                              <code className="bg-gray-100 px-2 py-1 rounded text-xs block mt-2">
+                                Code,Status,Campaign,Discount Value,Created At,Used At,Expires At
+                              </code>
+                            </div>
+                            
+                            <div>
+                              <Label htmlFor="csvFile">Select CSV File</Label>
+                              <Input
+                                id="csvFile"
+                                type="file"
+                                accept=".csv"
+                                onChange={handleFileUpload}
+                                className="mt-1"
+                              />
+                            </div>
+                            
+                            {importFile && (
+                              <div className="text-sm text-green-600">
+                                File selected: {importFile.name}
+                              </div>
+                            )}
+                            
+                            <Button
+                              onClick={handleImport}
+                              disabled={!importFile || importMutation.isPending}
+                              className="w-full bg-blue-600 hover:bg-blue-700"
+                            >
+                              <Upload className="mr-2 h-4 w-4" />
+                              {importMutation.isPending ? "Importing..." : "Import Codes"}
+                            </Button>
+                          </div>
+                        </DialogContent>
+                      </Dialog>
                     </div>
                   </div>
                   

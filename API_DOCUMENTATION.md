@@ -145,6 +145,42 @@ Your promo code management system now uses **API key authentication** for securi
 }
 ```
 
+### 8. Import Promo Codes from CSV
+**POST** `/api/promo-codes/import`
+
+**Headers:**
+```json
+{
+  "Content-Type": "application/json",
+  "x-api-key": "your-secure-api-key-here"
+}
+```
+
+**Request Body:**
+```json
+{
+  "codes": [
+    {
+      "code": "PROMO-A1B2",
+      "status": "unused",
+      "campaignName": "Summer Sale",
+      "discountValue": "20% off",
+      "expiresAt": "2025-12-31T23:59:59Z"
+    }
+  ]
+}
+```
+
+**Response:**
+```json
+{
+  "message": "Import completed: 5 imported, 2 skipped",
+  "imported": 5,
+  "skipped": 2,
+  "errors": []
+}
+```
+
 ---
 
 ## Code Generation Formats
@@ -209,9 +245,9 @@ npm start
 - No separate static hosting needed
 
 #### 5. **Database**
-- Currently using **in-memory storage**
-- Data will be lost when server restarts
-- For production, consider migrating to PostgreSQL
+- Now using **PostgreSQL** for permanent storage
+- Data persists across server restarts and deployments
+- Tables: `users` and `promo_codes` with proper relationships and indexes
 
 ### Security Considerations:
 1. **Generate strong API keys** (32+ random characters)
@@ -259,20 +295,31 @@ console.log(data);
 
 ## New Features Added:
 
-### ✓ CSV Download
-- Click the **"CSV (X)"** button to download all filtered codes
-- File includes: Code, Status, Campaign, Discount Value, Created At, Used At, Expires At
-- File name: `promo-codes-YYYY-MM-DD.csv`
+### ✓ PostgreSQL Database
+- **Permanent storage** - data survives server restarts
+- **Automatic expiration handling** - expired codes marked automatically
+- **Production ready** - proper database indexes and relationships
 
-### ✓ Bulk Delete
-- Select multiple codes with checkboxes
-- Delete selected codes with confirmation dialog
-- Clear selection option available
+### ✓ CSV Download & Import
+- **Download**: Click the **"CSV (X)"** button to download all filtered codes
+- **Import**: Click **"Import CSV"** button to upload and restore codes
+- **Data Migration**: Perfect for moving between platforms or backup/restore
+- File format: `Code,Status,Campaign,Discount Value,Created At,Used At,Expires At`
+
+### ✓ Enhanced Code Generation
+- **Flexible formats**: From `PROMO-XXXX` (1.6M codes) to `XXXXXXXXXX` (3.6Q codes)
+- **Custom prefixes**: `REST2024-XXXX`, `HOLIDAY-XXXXXX`, etc.
+- **Collision detection**: Automatic uniqueness validation
+
+### ✓ Bulk Operations
+- **Bulk selection** with checkboxes
+- **Bulk delete** with confirmation dialog
+- **Bulk import** from CSV files
 
 ### ✓ Enhanced Security
-- API key authentication on all endpoints
-- Environment variable configuration
-- Production-ready security measures
+- **API key authentication** on all endpoints
+- **Environment variable** configuration
+- **Production-ready** security measures
 
 ---
 

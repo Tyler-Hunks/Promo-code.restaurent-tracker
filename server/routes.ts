@@ -1,7 +1,7 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertPromoCodeSchema, bulkGenerateSchema, campaignGenerateSchema, type BulkGenerate, type CampaignGenerate } from "@shared/schema";
+import { insertPromoCodeSchema, bulkGenerateSchema, campaignGenerateSchema, csvImportSchema, type BulkGenerate, type CampaignGenerate, type CsvImport } from "@shared/schema";
 
 // API Key Authentication Middleware
 function requireApiKey(req: Request, res: Response, next: NextFunction) {
@@ -243,6 +243,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error) {
       res.status(500).json({ message: "Failed to delete promo codes" });
+    }
+  });
+
+  // Import promo codes from CSV
+  app.post("/api/promo-codes/import", async (req, res) => {
+    try {
+      const validation = csvImportSchema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({ 
+          message: "Invalid import data", 
+          errors: validation.error.errors 
+        });
+      }
+
+      const { codes } = validation.data;
+      
+      // Convert the data to the correct format for storage
+      const insertData = codes.map(code => ({
+        code: code.code,
+        campaignName: code.campaignName || undefined,
+        discountValue: code.discountValue || undefined,
+        expiresAt: code.expiresAt ? new Date(code.expiresAt) : undefined,
+      }));
+
+      const result = await storage.importPromoCodes(insertData);
+      
+      res.json({
+        message: `Import completed: ${result.imported} imported, ${result.skipped} skipped`,
+        ...result
+      });
+    } catch (error) {
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : "Failed to import promo codes" 
+      });
     }
   });
 
