@@ -33,7 +33,7 @@ export const insertPromoCodeSchema = createInsertSchema(promoCodes).pick({
 });
 
 export const bulkGenerateSchema = z.object({
-  count: z.number().min(1).max(100),
+  count: z.number().min(1).max(1000),
   format: z.enum(["PROMO-XXXX", "SAVE-XXXX-XX", "DISCOUNT-XXXXXX", "REST2024-XXXX", "XXXXXXXXXX"]).default("PROMO-XXXX"),
   campaignName: z.string().optional(),
   discountValue: z.string().optional(),
@@ -43,7 +43,7 @@ export const bulkGenerateSchema = z.object({
 export const campaignGenerateSchema = z.object({
   campaignName: z.string().min(1),
   discountValue: z.string().min(1),
-  count: z.number().min(1).max(100),
+  count: z.number().min(1).max(1000),
   format: z.enum(["PROMO-XXXX", "SAVE-XXXX-XX", "DISCOUNT-XXXXXX", "REST2024-XXXX", "XXXXXXXXXX"]).default("PROMO-XXXX"),
   expiresAt: z.string().datetime().optional(),
 });
