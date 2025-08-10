@@ -341,9 +341,9 @@ export default function Home() {
       Status: code.status,
       Campaign: code.campaignName || '',
       'Discount Value': code.discountValue || '',
-      'Created At': formatDate(code.createdAt?.toISOString() || null),
-      'Used At': formatDate(code.usedAt?.toISOString() || null),
-      'Expires At': formatDate(code.expiresAt?.toISOString() || null)
+      'Created At': formatDate(code.createdAt || null),
+      'Used At': formatDate(code.usedAt || null),
+      'Expires At': formatDate(code.expiresAt || null)
     }));
 
     // Create CSV content
