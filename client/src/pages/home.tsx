@@ -52,13 +52,18 @@ export default function Home() {
   // Generate campaign codes mutation
   const generateCampaignMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest("POST", "/api/promo-codes/generate-campaign", {
-        campaignName,
-        discountValue,
+      const payload: any = {
+        campaignName: campaignName.trim(),
+        discountValue: discountValue.trim(),
         count: bulkCount,
-        format: codeFormat,
-        expiresAt: expirationDate ? new Date(expirationDate).toISOString() : undefined,
-      });
+        format: codeFormat as "PROMO-XXXX" | "SAVE-XXXX-XX" | "DISCOUNT-XXXXXX" | "REST2024-XXXX" | "XXXXXXXXXX",
+      };
+
+      if (expirationDate) {
+        payload.expiresAt = new Date(expirationDate).toISOString();
+      }
+
+      const response = await apiRequest("POST", "/api/promo-codes/generate-campaign", payload);
       return response.json();
     },
     onSuccess: () => {
@@ -87,12 +92,22 @@ export default function Home() {
   // Generate single code mutation
   const generateSingleMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest("POST", "/api/promo-codes/generate", {
-        format: codeFormat,
-        campaignName: campaignName || undefined,
-        discountValue: discountValue || undefined,
-        expiresAt: expirationDate ? new Date(expirationDate).toISOString() : undefined,
-      });
+      const payload: any = {
+        format: codeFormat as "PROMO-XXXX" | "SAVE-XXXX-XX" | "DISCOUNT-XXXXXX" | "REST2024-XXXX" | "XXXXXXXXXX",
+      };
+
+      // Only include optional fields if they have values
+      if (campaignName && campaignName.trim()) {
+        payload.campaignName = campaignName.trim();
+      }
+      if (discountValue && discountValue.trim()) {
+        payload.discountValue = discountValue.trim();
+      }
+      if (expirationDate) {
+        payload.expiresAt = new Date(expirationDate).toISOString();
+      }
+
+      const response = await apiRequest("POST", "/api/promo-codes/generate", payload);
       return response.json();
     },
     onSuccess: () => {
@@ -115,13 +130,23 @@ export default function Home() {
   // Generate bulk codes mutation
   const generateBulkMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest("POST", "/api/promo-codes/generate-bulk", {
+      const payload: any = {
         count: bulkCount,
-        format: codeFormat,
-        campaignName: campaignName || undefined,
-        discountValue: discountValue || undefined,
-        expiresAt: expirationDate ? new Date(expirationDate).toISOString() : undefined,
-      });
+        format: codeFormat as "PROMO-XXXX" | "SAVE-XXXX-XX" | "DISCOUNT-XXXXXX" | "REST2024-XXXX" | "XXXXXXXXXX",
+      };
+
+      // Only include optional fields if they have values
+      if (campaignName && campaignName.trim()) {
+        payload.campaignName = campaignName.trim();
+      }
+      if (discountValue && discountValue.trim()) {
+        payload.discountValue = discountValue.trim();
+      }
+      if (expirationDate) {
+        payload.expiresAt = new Date(expirationDate).toISOString();
+      }
+
+      const response = await apiRequest("POST", "/api/promo-codes/generate-bulk", payload);
       return response.json();
     },
     onSuccess: () => {
