@@ -1,0 +1,27 @@
+{
+  "name": "promo-code-manager-cloudflare",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "build": "vite build --config vite.config.cloudflare.ts",
+    "build:functions": "tsc functions/api/[...routes].ts --outDir functions-dist --target ES2022 --moduleResolution node",
+    "preview": "wrangler pages dev dist --compatibility-date=2024-08-10",
+    "deploy": "npm run build && wrangler pages deploy dist",
+    "db:schema": "drizzle-kit generate",
+    "db:push": "drizzle-kit push"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.39.7",
+    "postgres": "^3.4.3",
+    "drizzle-orm": "^0.39.1",
+    "drizzle-zod": "^0.7.0",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/node": "20.16.11",
+    "drizzle-kit": "^0.30.4",
+    "typescript": "5.6.3",
+    "vite": "^5.4.19",
+    "wrangler": "^3.0.0"
+  }
+}

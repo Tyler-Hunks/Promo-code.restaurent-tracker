@@ -12,6 +12,10 @@ export async function apiRequest(
   url: string,
   data?: unknown | undefined,
 ): Promise<Response> {
+  // For production, use environment-specific API base URL
+  const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
+  const fullUrl = url.startsWith('http') ? url : `${baseUrl}${url}`;
+  
   const headers: Record<string, string> = {
     'x-api-key': import.meta.env.VITE_API_KEY || 'promo-manager-2024-secure-key', // API key for authentication
   };
@@ -20,7 +24,7 @@ export async function apiRequest(
     headers['Content-Type'] = 'application/json';
   }
 
-  const res = await fetch(url, {
+  const res = await fetch(fullUrl, {
     method,
     headers,
     body: data ? JSON.stringify(data) : undefined,
@@ -37,7 +41,11 @@ export const getQueryFn: <T>(options: {
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
-    const res = await fetch(queryKey.join("/") as string, {
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
+    const url = queryKey.join("/") as string;
+    const fullUrl = url.startsWith('http') ? url : `${baseUrl}${url}`;
+    
+    const res = await fetch(fullUrl, {
       headers: {
         'x-api-key': import.meta.env.VITE_API_KEY || 'promo-manager-2024-secure-key', // API key for authentication
       },
