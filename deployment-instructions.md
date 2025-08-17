@@ -53,10 +53,21 @@ You can copy `package.cloudflare.json` to `package.json` for Cloudflare-specific
 6. Click **Begin setup**
 
 ### 3.2 Configure Build Settings
+**If you see Vite option:**
 - **Framework preset**: Vite
 - **Build command**: `npm run build`
 - **Build output directory**: `dist`
-- **Root directory**: `/` (leave empty or set to client if needed)
+
+**If you only see VitePress (common issue):**
+- **Framework preset**: None (or Custom)
+- **Build command**: `npm run build`
+- **Build output directory**: `dist`
+- **Root directory**: Leave empty
+
+**Alternative approach - Manual configuration:**
+- **Framework preset**: None
+- **Build command**: `cd client && npm install && npm run build`  
+- **Build output directory**: `client/dist`
 
 ### 3.3 Set Environment Variables
 In Cloudflare Pages settings, add these environment variables:
