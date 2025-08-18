@@ -79,8 +79,13 @@ SUPABASE_URL=https://your-project-id.supabase.co
 SUPABASE_ANON_KEY=your-anon-key
 API_KEY=your-secure-api-key
 VITE_API_KEY=your-secure-api-key
-VITE_API_BASE_URL=https://your-site.pages.dev
+VITE_API_BASE_URL=https://your-project-name.pages.dev
 ```
+
+**Important**: 
+- Replace `your-project-name` with your actual Cloudflare Pages project name
+- You'll get the exact URL after your first deployment
+- For example: if your GitHub repo is `promo-codes`, the URL will be `https://promo-codes.pages.dev`
 
 ### 3.4 Deploy
 1. Click **Save and Deploy**
