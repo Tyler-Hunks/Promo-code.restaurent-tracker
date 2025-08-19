@@ -1,7 +1,6 @@
 # Cloudflare Pages configuration
 name = "promo-code-manager"
 compatibility_date = "2024-08-10"
-compatibility_flags = ["nodejs_compat"]
 
 # Pages Functions configuration
 [env.production]

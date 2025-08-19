@@ -11,7 +11,7 @@ export default defineConfig({
     },
   },
   build: {
-    outDir: "dist",
+    outDir: "../dist", // Output to root dist directory
     emptyOutDir: true,
   },
   root: "./client",

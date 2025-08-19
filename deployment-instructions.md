@@ -53,21 +53,21 @@ You can copy `package.cloudflare.json` to `package.json` for Cloudflare-specific
 6. Click **Begin setup**
 
 ### 3.2 Configure Build Settings
-**If you see Vite option:**
-- **Framework preset**: Vite
-- **Build command**: `npm run build`
-- **Build output directory**: `dist`
 
-**If you only see VitePress (common issue):**
-- **Framework preset**: None (or Custom)
-- **Build command**: `npm run build`
-- **Build output directory**: `dist`
-- **Root directory**: Leave empty
-
-**Alternative approach - Manual configuration:**
+**Recommended Settings (use these):**
 - **Framework preset**: None
-- **Build command**: `cd client && npm install && npm run build`  
-- **Build output directory**: `client/dist`
+- **Build command**: `vite build --config vite.config.cloudflare.ts`
+- **Build output directory**: `dist`
+- **Root directory**: (leave empty)
+
+**Alternative if above fails:**
+- **Framework preset**: None
+- **Build command**: `npm ci && vite build --config vite.config.cloudflare.ts`
+- **Build output directory**: `dist`
+
+**Important Notes:**
+- Don't use `npm run build` - it includes server bundling we don't need
+- Make sure Node.js compatibility is enabled for Functions (see environment variables section)
 
 ### 3.3 Set Environment Variables
 In Cloudflare Pages settings, add these environment variables:
@@ -80,17 +80,24 @@ SUPABASE_ANON_KEY=your-anon-key
 API_KEY=your-secure-api-key
 VITE_API_KEY=your-secure-api-key
 VITE_API_BASE_URL=https://your-project-name.pages.dev
+NODE_OPTIONS=--experimental-modules
 ```
 
-**Important**: 
+### 3.4 Enable Node.js Compatibility
+**CRITICAL**: In Cloudflare Pages → Settings → Functions:
+- Enable **Node.js compatibility flag**
+- This fixes the `node:events` and `node:stream` warnings
+
+**Important Notes**: 
 - Replace `your-project-name` with your actual Cloudflare Pages project name
 - You'll get the exact URL after your first deployment
 - For example: if your GitHub repo is `promo-codes`, the URL will be `https://promo-codes.pages.dev`
 
-### 3.4 Deploy
+### 3.5 Deploy
 1. Click **Save and Deploy**
 2. Wait for build to complete (3-5 minutes)
-3. Your site will be available at `https://your-project-name.pages.dev`
+3. If build fails, check the logs and ensure Node.js compatibility is enabled
+4. Your site will be available at `https://your-project-name.pages.dev`
 
 ## Step 4: Test Your Deployment
 
