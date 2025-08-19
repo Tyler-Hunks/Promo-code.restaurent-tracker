@@ -1,8 +1,6 @@
-// Cloudflare Pages Functions handler
-// This replaces your Express.js server for serverless deployment
-
+// Cloudflare Pages Function for promo codes API
 import { storage } from "../../server/storage-cloudflare";
-import { insertPromoCodeSchema, bulkGenerateSchema, campaignGenerateSchema, csvImportSchema } from "../../shared/schema";
+import { insertPromoCodeSchema, bulkGenerateSchema } from "../../shared/schema";
 
 // API Key Authentication
 function requireApiKey(request: Request, env: any) {
@@ -21,7 +19,7 @@ function requireApiKey(request: Request, env: any) {
   return null;
 }
 
-// CORS headers for all responses
+// CORS headers
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, PATCH, OPTIONS',
@@ -54,11 +52,8 @@ async function generateUniqueCode(format: string = "PROMO-XXXX", env: any): Prom
   return code;
 }
 
-// Main handler function
 export async function onRequest(context: any): Promise<Response> {
   const { request, env } = context;
-  const url = new URL(request.url);
-  const path = url.pathname;
   const method = request.method;
 
   // Handle CORS preflight
@@ -69,7 +64,7 @@ export async function onRequest(context: any): Promise<Response> {
     });
   }
 
-  // Check API key for all API routes
+  // Check API key
   const authError = requireApiKey(request, env);
   if (authError) {
     return new Response(authError.body, {
@@ -81,29 +76,16 @@ export async function onRequest(context: any): Promise<Response> {
   const storageInstance = storage(env);
 
   try {
-    // Route handling
-    if (path === '/api/promo-codes' && method === 'GET') {
+    // GET /api/promo-codes - Get all promo codes
+    if (method === 'GET') {
       const codes = await storageInstance.getAllPromoCodes();
       return new Response(JSON.stringify(codes), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
 
-    if (path === '/api/promo-codes/stats' && method === 'GET') {
-      const stats = await storageInstance.getPromoCodeStats();
-      return new Response(JSON.stringify(stats), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
-    }
-
-    if (path === '/api/campaigns' && method === 'GET') {
-      const campaigns = await storageInstance.getCampaigns();
-      return new Response(JSON.stringify(campaigns), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
-    }
-
-    if (path === '/api/promo-codes/generate' && method === 'POST') {
+    // POST /api/promo-codes - Generate single promo code
+    if (method === 'POST') {
       const body = await request.json();
       const { format = "PROMO-XXXX", campaignName, discountValue, expiresAt } = body;
       const code = await generateUniqueCode(format, env);
@@ -134,45 +116,8 @@ export async function onRequest(context: any): Promise<Response> {
       });
     }
 
-    if (path === '/api/promo-codes/generate-bulk' && method === 'POST') {
-      const body = await request.json();
-      const validation = bulkGenerateSchema.safeParse(body);
-      
-      if (!validation.success) {
-        return new Response(JSON.stringify({ message: "Invalid bulk generation parameters" }), {
-          status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        });
-      }
-
-      const { count, format, campaignName, discountValue, expiresAt } = validation.data;
-      const codes: string[] = [];
-
-      // Generate unique codes
-      for (let i = 0; i < count; i++) {
-        const code = await generateUniqueCode(format, env);
-        codes.push(code);
-      }
-
-      const insertData = codes.map(code => ({ 
-        code, 
-        campaignName, 
-        discountValue, 
-        expiresAt: expiresAt ? new Date(expiresAt) : undefined 
-      }));
-      
-      const promoCodes = await storageInstance.createBulkPromoCodes(insertData);
-      return new Response(JSON.stringify(promoCodes), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
-    }
-
-    // Handle other routes similarly...
-    // (I'll add more routes if needed)
-
-    // 404 for unknown routes
-    return new Response(JSON.stringify({ message: 'Route not found' }), {
-      status: 404,
+    return new Response(JSON.stringify({ message: 'Method not allowed' }), {
+      status: 405,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
 
