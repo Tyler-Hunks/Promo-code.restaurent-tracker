@@ -1,14 +1,23 @@
-# Cloudflare Pages configuration
+# Cloudflare Workers configuration
 name = "promo-code-manager"
+main = "server/worker.ts"
 compatibility_date = "2024-08-10"
+compatibility_flags = ["nodejs_compat"]
 
-# Pages Functions configuration
-[env.production]
-# Set these environment variables in Cloudflare Dashboard
+# Static assets configuration (for serving React app)
+[assets]
+directory = "dist"
+binding = "ASSETS"
+
+# Environment variables (set these in Cloudflare Dashboard)
+[vars]
 # DATABASE_URL = "your-supabase-connection-string"
 # SUPABASE_URL = "your-supabase-project-url" 
 # SUPABASE_ANON_KEY = "your-supabase-anon-key"
 # API_KEY = "your-api-key"
 
-[env.preview]
-# Same variables for preview/staging environment
+[env.production]
+name = "promo-code-manager-prod"
+
+[env.preview]  
+name = "promo-code-manager-preview"
