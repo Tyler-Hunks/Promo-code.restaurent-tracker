@@ -102,7 +102,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const validation = bulkGenerateSchema.safeParse(req.body);
       if (!validation.success) {
-        return res.status(400).json({ message: "Invalid bulk generation parameters" });
+        console.error("Bulk generation validation error:", validation.error);
+        return res.status(400).json({ 
+          message: "Invalid bulk generation parameters",
+          errors: validation.error.issues 
+        });
       }
 
       const { count, format, campaignName, discountValue, expiresAt } = validation.data;
@@ -150,7 +154,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const validation = campaignGenerateSchema.safeParse(req.body);
       if (!validation.success) {
-        return res.status(400).json({ message: "Invalid campaign parameters" });
+        console.error("Campaign generation validation error:", validation.error);
+        return res.status(400).json({ 
+          message: "Invalid campaign parameters",
+          errors: validation.error.issues 
+        });
       }
 
       const { campaignName, discountValue, count, format, expiresAt } = validation.data;

@@ -290,8 +290,11 @@ export default function Home() {
   };
 
   // Format date
-  const formatDate = (date: string | null) => {
+  const formatDate = (date: string | Date | null) => {
     if (!date) return "-";
+    if (date instanceof Date) {
+      return date.toLocaleString();
+    }
     return new Date(date).toLocaleString();
   };
 
