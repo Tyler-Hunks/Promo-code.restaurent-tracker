@@ -250,7 +250,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
         deletedCount 
       });
     } catch (error) {
-      res.status(500).json({ message: "Failed to delete promo codes" });
+      console.error("Bulk delete error:", error);
+      res.status(500).json({ 
+        message: "Failed to delete promo codes",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  // Toggle promo code status
+  app.patch("/api/promo-codes/:code/toggle-status", async (req, res) => {
+    try {
+      const { code } = req.params;
+      const promoCode = await storage.getPromoCodeByCode(code);
+      
+      if (!promoCode) {
+        return res.status(404).json({ message: "Promo code not found" });
+      }
+
+      // Toggle between unused and used (don't allow toggling expired codes)
+      if (promoCode.status === "expired") {
+        return res.status(400).json({ message: "Cannot toggle expired promo codes" });
+      }
+
+      const newStatus = promoCode.status === "unused" ? "used" : "unused";
+      const updatedPromoCode = await storage.togglePromoCodeStatus(code, newStatus);
+      
+      res.json({
+        message: `Promo code status changed to ${newStatus}`,
+        promoCode: updatedPromoCode
+      });
+    } catch (error) {
+      console.error("Toggle status error:", error);
+      res.status(500).json({ 
+        message: "Failed to toggle promo code status",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
     }
   });
 

@@ -1,7 +1,7 @@
 import { type User, type InsertUser, type PromoCode, type InsertPromoCode, users, promoCodes } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { db } from "./db";
-import { eq, sql, and } from "drizzle-orm";
+import { eq, sql, and, inArray } from "drizzle-orm";
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
@@ -16,6 +16,7 @@ export interface IStorage {
   markPromoCodeAsUsed(code: string): Promise<PromoCode | undefined>;
   deletePromoCode(code: string): Promise<boolean>;
   deleteBulkPromoCodes(codes: string[]): Promise<number>;
+  togglePromoCodeStatus(code: string, newStatus: "unused" | "used"): Promise<PromoCode | undefined>;
   getPromoCodeStats(): Promise<{ total: number; used: number; available: number; expired: number }>;
   getCampaigns(): Promise<string[]>;
   importPromoCodes(promoCodes: InsertPromoCode[]): Promise<{ imported: number; skipped: number; errors: string[] }>;
@@ -161,6 +162,19 @@ export class MemStorage implements IStorage {
     return deletedCount;
   }
 
+  async togglePromoCodeStatus(code: string, newStatus: "unused" | "used"): Promise<PromoCode | undefined> {
+    const promoCode = await this.getPromoCodeByCode(code);
+    if (!promoCode) return undefined;
+
+    const updated = {
+      ...promoCode,
+      status: newStatus,
+      usedAt: newStatus === "used" ? new Date() : null
+    };
+    this.promoCodes.set(promoCode.id, updated);
+    return updated;
+  }
+
   async getCampaigns(): Promise<string[]> {
     const allCodes = Array.from(this.promoCodes.values());
     const uniqueNames = new Set(allCodes
@@ -263,8 +277,20 @@ export class DatabaseStorage implements IStorage {
   async deleteBulkPromoCodes(codes: string[]): Promise<number> {
     const result = await db
       .delete(promoCodes)
-      .where(sql`${promoCodes.code} = ANY(${codes})`);
+      .where(inArray(promoCodes.code, codes));
     return result.rowCount || 0;
+  }
+
+  async togglePromoCodeStatus(code: string, newStatus: "unused" | "used"): Promise<PromoCode | undefined> {
+    const [updated] = await db
+      .update(promoCodes)
+      .set({ 
+        status: newStatus,
+        usedAt: newStatus === "used" ? new Date() : null
+      })
+      .where(eq(promoCodes.code, code))
+      .returning();
+    return updated || undefined;
   }
 
   async getPromoCodeStats(): Promise<{ total: number; used: number; available: number; expired: number }> {

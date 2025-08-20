@@ -189,24 +189,24 @@ export default function Home() {
     },
   });
 
-  // Mark code as used
-  const markAsUsedMutation = useMutation({
+  // Toggle code status
+  const toggleStatusMutation = useMutation({
     mutationFn: async (code: string) => {
-      const response = await apiRequest("PATCH", `/api/promo-codes/${code}/redeem`);
+      const response = await apiRequest("PATCH", `/api/promo-codes/${code}/toggle-status`);
       return response.json();
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/promo-codes"] });
       queryClient.invalidateQueries({ queryKey: ["/api/promo-codes/stats"] });
       toast({
-        title: "Code Marked as Used",
-        description: "Promo code status updated successfully!",
+        title: "Status Updated",
+        description: data.message,
       });
     },
-    onError: () => {
+    onError: (error) => {
       toast({
         title: "Error",
-        description: "Failed to mark code as used",
+        description: error.message || "Failed to toggle code status",
         variant: "destructive",
       });
     },
@@ -1012,20 +1012,19 @@ export default function Home() {
                               </td>
                               <td className="px-4 py-3">
                                 <div className="flex items-center space-x-2">
-                                  {effectiveStatus === "unused" ? (
+                                  {effectiveStatus !== "expired" ? (
                                     <Button
                                       variant="ghost"
                                       size="sm"
-                                      onClick={() => markAsUsedMutation.mutate(code.code)}
-                                      disabled={markAsUsedMutation.isPending}
-                                      className="text-accent hover:text-orange-700 p-0 h-auto text-xs"
+                                      onClick={() => toggleStatusMutation.mutate(code.code)}
+                                      disabled={toggleStatusMutation.isPending}
+                                      className="text-blue-600 hover:text-blue-700 p-0 h-auto text-xs"
+                                      data-testid={`button-toggle-${code.code}`}
                                     >
-                                      Mark Used
+                                      {effectiveStatus === "unused" ? "Mark Used" : "Mark Unused"}
                                     </Button>
                                   ) : (
-                                    <span className="text-gray-400 text-xs">
-                                      {effectiveStatus === "used" ? formatDate(code.usedAt?.toString() || null) : "Expired"}
-                                    </span>
+                                    <span className="text-gray-400 text-xs">Expired</span>
                                   )}
                                   <Button
                                     variant="ghost"
