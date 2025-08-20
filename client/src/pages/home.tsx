@@ -486,51 +486,105 @@ export default function Home() {
                       Quick Generate
                     </Button>
                   </DialogTrigger>
-                  <DialogContent className="sm:max-w-md">
+                  <DialogContent className="sm:max-w-lg">
                     <DialogHeader>
                       <DialogTitle>Quick Code Generation</DialogTitle>
                     </DialogHeader>
                     <div className="space-y-4">
                       <div className="grid grid-cols-2 gap-3">
                         <div>
-                          <Label>Format</Label>
+                          <Label>Code Format</Label>
                           <Select value={codeFormat} onValueChange={setCodeFormat}>
-                            <SelectTrigger className="h-8">
+                            <SelectTrigger>
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="PROMO-XXXX">PROMO-XXXX</SelectItem>
-                              <SelectItem value="SAVE-XXXX-XX">SAVE-XXXX-XX</SelectItem>
-                              <SelectItem value="DISCOUNT-XXXXXX">DISCOUNT-XXXXXX</SelectItem>
+                              <SelectItem value="PROMO-XXXX">PROMO-XXXX (1.6M codes)</SelectItem>
+                              <SelectItem value="SAVE-XXXX-XX">SAVE-XXXX-XX (47M codes)</SelectItem>
+                              <SelectItem value="DISCOUNT-XXXXXX">DISCOUNT-XXXXXX (2.1B codes)</SelectItem>
+                              <SelectItem value="REST2024-XXXX">REST2024-XXXX (1.6M codes)</SelectItem>
+                              <SelectItem value="XXXXXXXXXX">XXXXXXXXXX (3.6Q codes)</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
                         <div>
-                          <Label>Count</Label>
+                          <Label>Quantity</Label>
                           <Input
                             type="number"
                             min="1"
-                            max="20"
+                            max="100"
                             value={bulkCount}
                             onChange={(e) => setBulkCount(Number(e.target.value))}
-                            className="h-8"
                           />
                         </div>
                       </div>
-                      <Button
-                        onClick={() => {
-                          if (bulkCount === 1) {
-                            generateSingleMutation.mutate();
-                          } else {
-                            generateBulkMutation.mutate();
-                          }
-                          setIsGenerateModalOpen(false);
-                        }}
-                        disabled={generateSingleMutation.isPending || generateBulkMutation.isPending}
-                        className="w-full bg-primary hover:bg-blue-700"
-                      >
-                        Generate {bulkCount} Code{bulkCount > 1 ? 's' : ''}
-                      </Button>
+                      
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <Label htmlFor="quickCampaignName">Campaign Name (Optional)</Label>
+                          <Input
+                            id="quickCampaignName"
+                            placeholder="e.g., Spring Sale"
+                            value={campaignName}
+                            onChange={(e) => setCampaignName(e.target.value)}
+                            data-testid="input-campaign-name"
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="quickDiscountValue">Discount Value (Optional)</Label>
+                          <Input
+                            id="quickDiscountValue"
+                            placeholder="e.g., 20% off, $10 off"
+                            value={discountValue}
+                            onChange={(e) => setDiscountValue(e.target.value)}
+                            data-testid="input-discount-value"
+                          />
+                        </div>
+                      </div>
+                      
+                      <div>
+                        <Label htmlFor="quickExpirationDate">Expiration Date (Optional)</Label>
+                        <Input
+                          id="quickExpirationDate"
+                          type="date"
+                          value={expirationDate}
+                          onChange={(e) => setExpirationDate(e.target.value)}
+                          data-testid="input-expiration-date"
+                        />
+                      </div>
+                      
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          onClick={() => {
+                            setCampaignName("");
+                            setDiscountValue("");
+                            setExpirationDate("");
+                            setBulkCount(1);
+                            setCodeFormat("PROMO-XXXX");
+                          }}
+                          className="flex-1"
+                          data-testid="button-reset-form"
+                        >
+                          Reset
+                        </Button>
+                        <Button
+                          onClick={() => {
+                            if (bulkCount === 1) {
+                              generateSingleMutation.mutate();
+                            } else {
+                              generateBulkMutation.mutate();
+                            }
+                            setIsGenerateModalOpen(false);
+                          }}
+                          disabled={generateSingleMutation.isPending || generateBulkMutation.isPending}
+                          className="flex-[2] bg-primary hover:bg-blue-700"
+                          data-testid="button-generate-codes"
+                        >
+                          <Plus className="mr-2 h-4 w-4" />
+                          Generate {bulkCount} Code{bulkCount > 1 ? 's' : ''}
+                        </Button>
+                      </div>
                     </div>
                   </DialogContent>
                 </Dialog>
