@@ -42,7 +42,7 @@ git push -u origin main
 
 ### 5. Configure Build Settings
 - **Framework preset**: None
-- **Build command**: `vite build --config vite.config.cloudflare.ts`
+- **Build command**: `npm install && npx vite build --config vite.config.cloudflare.ts`
 - **Root directory**: (leave empty)
 
 ### 6. Set Environment Variables

@@ -56,7 +56,7 @@ You can copy `package.cloudflare.json` to `package.json` for Cloudflare-specific
 
 **Recommended Settings (use these):**
 - **Framework preset**: None
-- **Build command**: `vite build --config vite.config.cloudflare.ts`
+- **Build command**: `npm install && npx vite build --config vite.config.cloudflare.ts`
 - **Build output directory**: `dist`
 - **Root directory**: (leave empty)
 
