@@ -9,11 +9,13 @@
 1. Go to https://dash.cloudflare.com/profile/api-tokens
 2. Click "Create Token"
 3. Use "Custom token" template
-4. Set permissions:
-   - Zone: Zone Settings:Read, Zone:Read
-   - Account: Cloudflare Workers:Edit
-   - Zone Resources: Include All zones
-5. Copy the generated token
+4. Set **Account Permissions**:
+   - **Workers Scripts: Edit**
+   - **Account Settings: Read**
+5. Set **Account Resources**: Include All accounts
+6. (Optional) Set **Zone Permissions**: 
+   - **Workers Routes: Edit** (only if using custom domains)
+7. Copy the generated token
 
 ### Step 2: Set Token in Replit
 ```bash
@@ -24,11 +26,12 @@ export CLOUDFLARE_API_TOKEN="your-token-here"
 wrangler config set api_token "your-token-here"
 ```
 
-## Solution 2: Use Cloudflare Dashboard
-Instead of CLI deployment, you can:
-1. Zip your project files
-2. Upload directly to Cloudflare Workers dashboard
-3. Set environment variables through the web interface
+## Solution 2: Use Pre-built Template (Easiest)
+1. Go to https://dash.cloudflare.com/profile/api-tokens
+2. Click "Create Token"
+3. Use "Edit Cloudflare Workers" template
+4. This automatically includes all necessary permissions
+5. Copy the generated token
 
 ## Solution 3: GitHub Integration
 1. Push your code to GitHub
