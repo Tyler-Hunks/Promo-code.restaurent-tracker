@@ -47,12 +47,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Apply API key authentication to all API routes
   app.use('/api', requireApiKey);
 
-  // Get all promo codes
+  // Get all promo codes with pagination and search
   app.get("/api/promo-codes", async (req, res) => {
     try {
-      const codes = await storage.getAllPromoCodes();
-      res.json(codes);
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 100; // Default to 100 records per page
+      const search = req.query.search as string || '';
+      const campaign = req.query.campaign as string || '';
+      const status = req.query.status as string || '';
+      
+      // If no pagination requested, use legacy behavior but with warning
+      if (!req.query.page && !req.query.limit) {
+        const codes = await storage.getAllPromoCodes();
+        if (codes.length > 1000) {
+          res.setHeader('X-Warning', 'Large dataset detected. Consider using pagination: ?page=1&limit=100');
+        }
+        return res.json(codes);
+      }
+      
+      const result = await storage.getPaginatedPromoCodes({
+        page,
+        limit: Math.min(limit, 1000), // Cap at 1000 per page
+        search,
+        campaign,
+        status
+      });
+      
+      res.json(result);
     } catch (error) {
+      console.error('Error fetching promo codes:', error);
       res.status(500).json({ message: "Failed to fetch promo codes" });
     }
   });

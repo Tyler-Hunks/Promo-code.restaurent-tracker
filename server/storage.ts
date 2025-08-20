@@ -3,6 +3,22 @@ import { randomUUID } from "crypto";
 import { db } from "./db";
 import { eq, sql, and, inArray } from "drizzle-orm";
 
+export interface PaginationOptions {
+  page: number;
+  limit: number;
+  search?: string;
+  campaign?: string;
+  status?: string;
+}
+
+export interface PaginatedResult<T> {
+  data: T[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
@@ -10,6 +26,7 @@ export interface IStorage {
   
   // Promo code methods
   getAllPromoCodes(): Promise<PromoCode[]>;
+  getPaginatedPromoCodes(options: PaginationOptions): Promise<PaginatedResult<PromoCode>>;
   getPromoCodeByCode(code: string): Promise<PromoCode | undefined>;
   createPromoCode(promoCode: InsertPromoCode): Promise<PromoCode>;
   createBulkPromoCodes(promoCodes: InsertPromoCode[]): Promise<PromoCode[]>;
@@ -52,6 +69,44 @@ export class MemStorage implements IStorage {
     return Array.from(this.promoCodes.values()).sort(
       (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     );
+  }
+
+  async getPaginatedPromoCodes(options: PaginationOptions): Promise<PaginatedResult<PromoCode>> {
+    // In-memory implementation for MemStorage
+    let allCodes = Array.from(this.promoCodes.values());
+    
+    // Apply filters
+    if (options.search) {
+      const searchLower = options.search.toLowerCase();
+      allCodes = allCodes.filter(code => 
+        code.code.toLowerCase().includes(searchLower) ||
+        (code.campaignName && code.campaignName.toLowerCase().includes(searchLower))
+      );
+    }
+    
+    if (options.campaign) {
+      allCodes = allCodes.filter(code => code.campaignName === options.campaign);
+    }
+    
+    if (options.status) {
+      allCodes = allCodes.filter(code => code.status === options.status);
+    }
+    
+    // Sort by creation date
+    allCodes.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    
+    const total = allCodes.length;
+    const totalPages = Math.ceil(total / options.limit);
+    const offset = (options.page - 1) * options.limit;
+    const data = allCodes.slice(offset, offset + options.limit);
+    
+    return {
+      data,
+      total,
+      page: options.page,
+      limit: options.limit,
+      totalPages
+    };
   }
 
   async getPromoCodeByCode(code: string): Promise<PromoCode | undefined> {
@@ -232,6 +287,52 @@ export class DatabaseStorage implements IStorage {
   async getAllPromoCodes(): Promise<PromoCode[]> {
     const codes = await db.select().from(promoCodes).orderBy(sql`${promoCodes.createdAt} DESC`);
     return codes;
+  }
+
+  async getPaginatedPromoCodes(options: PaginationOptions): Promise<PaginatedResult<PromoCode>> {
+    // Build where conditions
+    const conditions = [];
+    
+    if (options.search) {
+      conditions.push(
+        sql`(${promoCodes.code} ILIKE ${'%' + options.search + '%'} OR ${promoCodes.campaignName} ILIKE ${'%' + options.search + '%'})`
+      );
+    }
+    
+    if (options.campaign) {
+      conditions.push(eq(promoCodes.campaignName, options.campaign));
+    }
+    
+    if (options.status) {
+      conditions.push(eq(promoCodes.status, options.status as any));
+    }
+
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+    // Get total count
+    const [{ count }] = await db
+      .select({ count: sql<number>`COUNT(*)::int` })
+      .from(promoCodes)
+      .where(whereClause);
+
+    // Get paginated data
+    const data = await db
+      .select()
+      .from(promoCodes)
+      .where(whereClause)
+      .orderBy(sql`${promoCodes.createdAt} DESC`)
+      .limit(options.limit)
+      .offset((options.page - 1) * options.limit);
+
+    const totalPages = Math.ceil(count / options.limit);
+
+    return {
+      data,
+      total: count,
+      page: options.page,
+      limit: options.limit,
+      totalPages
+    };
   }
 
   async getPromoCodeByCode(code: string): Promise<PromoCode | undefined> {
