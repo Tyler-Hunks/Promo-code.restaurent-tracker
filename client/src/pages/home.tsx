@@ -56,7 +56,7 @@ export default function Home() {
         campaignName: campaignName.trim(),
         discountValue: discountValue.trim(),
         count: bulkCount,
-        format: codeFormat as "PROMO-XXXX" | "SAVE-XXXX-XX" | "DISCOUNT-XXXXXX" | "REST2024-XXXX" | "XXXXXXXXXX",
+        format: codeFormat,
       };
 
       if (expirationDate) {
@@ -93,7 +93,7 @@ export default function Home() {
   const generateSingleMutation = useMutation({
     mutationFn: async () => {
       const payload: any = {
-        format: codeFormat as "PROMO-XXXX" | "SAVE-XXXX-XX" | "DISCOUNT-XXXXXX" | "REST2024-XXXX" | "XXXXXXXXXX",
+        format: codeFormat,
       };
 
       // Only include optional fields if they have values
@@ -132,7 +132,7 @@ export default function Home() {
     mutationFn: async () => {
       const payload: any = {
         count: bulkCount,
-        format: codeFormat as "PROMO-XXXX" | "SAVE-XXXX-XX" | "DISCOUNT-XXXXXX" | "REST2024-XXXX" | "XXXXXXXXXX",
+        format: codeFormat,
       };
 
       // Only include optional fields if they have values
@@ -493,19 +493,18 @@ export default function Home() {
                     <div className="space-y-4">
                       <div className="grid grid-cols-2 gap-3">
                         <div>
-                          <Label>Code Format</Label>
-                          <Select value={codeFormat} onValueChange={setCodeFormat}>
-                            <SelectTrigger>
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="PROMO-XXXX">PROMO-XXXX (1.6M codes)</SelectItem>
-                              <SelectItem value="SAVE-XXXX-XX">SAVE-XXXX-XX (47M codes)</SelectItem>
-                              <SelectItem value="DISCOUNT-XXXXXX">DISCOUNT-XXXXXX (2.1B codes)</SelectItem>
-                              <SelectItem value="REST2024-XXXX">REST2024-XXXX (1.6M codes)</SelectItem>
-                              <SelectItem value="XXXXXXXXXX">XXXXXXXXXX (3.6Q codes)</SelectItem>
-                            </SelectContent>
-                          </Select>
+                          <Label htmlFor="quickCodeFormat">Code Format</Label>
+                          <Input
+                            id="quickCodeFormat"
+                            placeholder="e.g., PROMO-XXXX, SAVE-XX-XX"
+                            value={codeFormat}
+                            onChange={(e) => setCodeFormat(e.target.value)}
+                            data-testid="input-code-format"
+                            className="font-mono"
+                          />
+                          <p className="text-xs text-gray-500 mt-1">
+                            Use X for random characters
+                          </p>
                         </div>
                         <div>
                           <Label>Quantity</Label>
@@ -515,6 +514,7 @@ export default function Home() {
                             max="100"
                             value={bulkCount}
                             onChange={(e) => setBulkCount(Number(e.target.value))}
+                            data-testid="input-quantity"
                           />
                         </div>
                       </div>
@@ -624,19 +624,15 @@ export default function Home() {
                       
                       <div className="grid grid-cols-3 gap-3">
                         <div>
-                          <Label>Code Format</Label>
-                          <Select value={codeFormat} onValueChange={setCodeFormat}>
-                            <SelectTrigger>
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="PROMO-XXXX">PROMO-XXXX (1.6M codes)</SelectItem>
-                              <SelectItem value="SAVE-XXXX-XX">SAVE-XXXX-XX (47M codes)</SelectItem>
-                              <SelectItem value="DISCOUNT-XXXXXX">DISCOUNT-XXXXXX (2.1B codes)</SelectItem>
-                              <SelectItem value="REST2024-XXXX">REST2024-XXXX (1.6M codes)</SelectItem>
-                              <SelectItem value="XXXXXXXXXX">XXXXXXXXXX (3.6Q codes)</SelectItem>
-                            </SelectContent>
-                          </Select>
+                          <Label htmlFor="campaignCodeFormat">Code Format</Label>
+                          <Input
+                            id="campaignCodeFormat"
+                            placeholder="e.g., SUMMER-XXXX"
+                            value={codeFormat}
+                            onChange={(e) => setCodeFormat(e.target.value)}
+                            className="font-mono"
+                            data-testid="input-campaign-code-format"
+                          />
                         </div>
                         <div>
                           <Label>Quantity</Label>
