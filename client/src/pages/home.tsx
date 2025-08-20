@@ -37,7 +37,7 @@ export default function Home() {
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(100);
-  const [usePagination, setUsePagination] = useState(false);
+  const [usePagination, setUsePagination] = useState(true);
 
   // Fetch promo codes (with optional pagination)
   const { data: codesResponse, isLoading: isLoadingCodes } = useQuery<PromoCode[] | { data: PromoCode[]; total: number; page: number; totalPages: number }>({
@@ -291,6 +291,30 @@ export default function Home() {
     },
   });
 
+  // Delete all codes mutation for optimization
+  const deleteAllCodesMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("DELETE", "/api/promo-codes/all", {});
+      return response.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/promo-codes"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/promo-codes/stats"] });
+      setSelectedCodes([]);
+      toast({
+        title: "All Codes Deleted",
+        description: `${data.deletedCount || 'All'} promo codes deleted for performance optimization!`,
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to delete all codes",
+        variant: "destructive",
+      });
+    },
+  });
+
   // Filter codes based on search, status, and campaign
   const filteredCodes = codes.filter((code: PromoCode) => {
     const matchesSearch = code.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -326,8 +350,64 @@ export default function Home() {
     return new Date(date).toLocaleString();
   };
 
-  // Download CSV functionality  
-  const downloadCSV = () => {
+  // Download CSV functionality for all codes
+  const downloadAllCodesCSV = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("GET", "/api/promo-codes?export=all");
+      return response.json();
+    },
+    onSuccess: (allCodes: PromoCode[]) => {
+      // Prepare CSV data with all codes
+      const csvData = allCodes.map(code => ({
+        Code: code.code,
+        Status: code.status,
+        Campaign: code.campaignName || '',
+        'Discount Value': code.discountValue || '',
+        'Created At': formatDate(code.createdAt || null),
+        'Used At': formatDate(code.usedAt || null),
+        'Expires At': formatDate(code.expiresAt || null)
+      }));
+
+      // Create CSV content
+      const headers = ['Code', 'Status', 'Campaign', 'Discount Value', 'Created At', 'Used At', 'Expires At'];
+      const csvContent = [
+        headers.join(','),
+        ...csvData.map(row => 
+          headers.map(header => {
+            const value = row[header as keyof typeof row] || '';
+            // Escape commas and quotes in values
+            return `"${String(value).replace(/"/g, '""')}"`;
+          }).join(',')
+        )
+      ].join('\n');
+
+      // Create and trigger download
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `all-promo-codes-${new Date().toISOString().split('T')[0]}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      toast({
+        title: "All Codes Downloaded",
+        description: `${allCodes.length} promo codes exported to CSV!`,
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Download Failed",
+        description: "Failed to download all codes",
+        variant: "destructive",
+      });
+    }
+  });
+
+  // Download CSV functionality for current view
+  const downloadCurrentPageCSV = () => {
     // Prepare CSV data
     const csvData = codes.map(code => ({
       Code: code.code,
@@ -357,7 +437,7 @@ export default function Home() {
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
     link.setAttribute('href', url);
-    link.setAttribute('download', `promo-codes-${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute('download', `promo-codes-page-${currentPage}-${new Date().toISOString().split('T')[0]}.csv`);
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();
@@ -366,6 +446,51 @@ export default function Home() {
     toast({
       title: "CSV Downloaded",
       description: `${codes.length} promo codes exported to CSV!`,
+    });
+  };
+
+  // Download CSV for selected codes
+  const downloadSelectedCodesCSV = () => {
+    const selectedCodeData = codes.filter(code => selectedCodes.includes(code.code));
+    
+    // Prepare CSV data
+    const csvData = selectedCodeData.map(code => ({
+      Code: code.code,
+      Status: code.status,
+      Campaign: code.campaignName || '',
+      'Discount Value': code.discountValue || '',
+      'Created At': formatDate(code.createdAt || null),
+      'Used At': formatDate(code.usedAt || null),
+      'Expires At': formatDate(code.expiresAt || null)
+    }));
+
+    // Create CSV content
+    const headers = ['Code', 'Status', 'Campaign', 'Discount Value', 'Created At', 'Used At', 'Expires At'];
+    const csvContent = [
+      headers.join(','),
+      ...csvData.map(row => 
+        headers.map(header => {
+          const value = row[header as keyof typeof row] || '';
+          // Escape commas and quotes in values
+          return `"${String(value).replace(/"/g, '""')}"`;
+        }).join(',')
+      )
+    ].join('\n');
+
+    // Create and trigger download
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `selected-promo-codes-${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    toast({
+      title: "Selected Codes Downloaded",
+      description: `${selectedCodeData.length} selected promo codes exported to CSV!`,
     });
   };
 
@@ -823,16 +948,74 @@ export default function Home() {
                       </div>
                       
                       {/* CSV Download Button */}
-                      <Button
-                        onClick={downloadCSV}
-                        variant="outline"
-                        disabled={codes.length === 0}
-                        className="border-green-300 text-green-600 hover:bg-green-50 hover:text-green-700"
-                      >
-                        <Download className="mr-2 h-4 w-4" />
-                        CSV ({codes.length})
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button
+                          onClick={downloadCurrentPageCSV}
+                          variant="outline"
+                          disabled={codes.length === 0}
+                          className="border-green-300 text-green-600 hover:bg-green-50 hover:text-green-700"
+                          data-testid="button-download-current"
+                        >
+                          <Download className="mr-2 h-4 w-4" />
+                          Page CSV ({codes.length})
+                        </Button>
+                        <Button
+                          onClick={() => downloadAllCodesCSV.mutate()}
+                          variant="outline"
+                          disabled={downloadAllCodesCSV.isPending}
+                          className="border-blue-300 text-blue-600 hover:bg-blue-50 hover:text-blue-700"
+                          data-testid="button-download-all"
+                        >
+                          <Download className="mr-2 h-4 w-4" />
+                          {downloadAllCodesCSV.isPending ? "Downloading..." : `All CSV (${stats.total})`}
+                        </Button>
+                        {selectedCodes.length > 0 && (
+                          <Button
+                            onClick={downloadSelectedCodesCSV}
+                            variant="outline"
+                            className="border-purple-300 text-purple-600 hover:bg-purple-50 hover:text-purple-700"
+                            data-testid="button-download-selected"
+                          >
+                            <Download className="mr-2 h-4 w-4" />
+                            Selected CSV ({selectedCodes.length})
+                          </Button>
+                        )}
+                      </div>
                       
+                      {/* Performance Optimization */}
+                      {stats.total > 1000 && (
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button
+                              variant="outline"
+                              className="border-red-300 text-red-600 hover:bg-red-50 hover:text-red-700"
+                              data-testid="button-delete-all"
+                            >
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              Clear All ({stats.total})
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Delete All Promo Codes</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                This will permanently delete all {stats.total} promo codes from the database for performance optimization. 
+                                This action cannot be undone. Make sure to download a backup first!
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction 
+                                onClick={() => deleteAllCodesMutation.mutate()}
+                                className="bg-red-600 hover:bg-red-700"
+                              >
+                                Delete All {stats.total} Codes
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      )}
+
                       {/* CSV Import Button */}
                       <Dialog open={isImportModalOpen} onOpenChange={setIsImportModalOpen}>
                         <DialogTrigger asChild>

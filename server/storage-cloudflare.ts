@@ -84,6 +84,11 @@ export class CloudflareStorage implements IStorage {
     return result.rowCount || 0;
   }
 
+  async deleteAllPromoCodes(): Promise<number> {
+    const result = await this.db.delete(promoCodes);
+    return result.rowCount || 0;
+  }
+
   async getPromoCodeStats(): Promise<{ total: number; used: number; available: number; expired: number }> {
     // Update expired codes first
     await this.db

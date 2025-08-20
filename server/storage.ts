@@ -33,6 +33,7 @@ export interface IStorage {
   markPromoCodeAsUsed(code: string): Promise<PromoCode | undefined>;
   deletePromoCode(code: string): Promise<boolean>;
   deleteBulkPromoCodes(codes: string[]): Promise<number>;
+  deleteAllPromoCodes(): Promise<number>;
   togglePromoCodeStatus(code: string, newStatus: "unused" | "used"): Promise<PromoCode | undefined>;
   getPromoCodeStats(): Promise<{ total: number; used: number; available: number; expired: number }>;
   getCampaigns(): Promise<string[]>;
@@ -217,6 +218,12 @@ export class MemStorage implements IStorage {
     return deletedCount;
   }
 
+  async deleteAllPromoCodes(): Promise<number> {
+    const total = this.promoCodes.size;
+    this.promoCodes.clear();
+    return total;
+  }
+
   async togglePromoCodeStatus(code: string, newStatus: "unused" | "used"): Promise<PromoCode | undefined> {
     const promoCode = await this.getPromoCodeByCode(code);
     if (!promoCode) return undefined;
@@ -379,6 +386,11 @@ export class DatabaseStorage implements IStorage {
     const result = await db
       .delete(promoCodes)
       .where(inArray(promoCodes.code, codes));
+    return result.rowCount || 0;
+  }
+
+  async deleteAllPromoCodes(): Promise<number> {
+    const result = await db.delete(promoCodes);
     return result.rowCount || 0;
   }
 
