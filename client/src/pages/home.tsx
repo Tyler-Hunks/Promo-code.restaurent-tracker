@@ -34,10 +34,38 @@ export default function Home() {
   const [importFile, setImportFile] = useState<File | null>(null);
   const { toast } = useToast();
 
-  // Fetch all promo codes
-  const { data: codes = [], isLoading: isLoadingCodes } = useQuery<PromoCode[]>({
-    queryKey: ["/api/promo-codes"],
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(100);
+  const [usePagination, setUsePagination] = useState(false);
+
+  // Fetch promo codes (with optional pagination)
+  const { data: codesResponse, isLoading: isLoadingCodes } = useQuery<PromoCode[] | { data: PromoCode[]; total: number; page: number; totalPages: number }>({
+    queryKey: usePagination ? ["/api/promo-codes", currentPage, itemsPerPage, searchTerm, selectedCampaign, statusFilter] : ["/api/promo-codes"],
+    queryFn: async () => {
+      if (usePagination) {
+        const params = new URLSearchParams({
+          page: currentPage.toString(),
+          limit: itemsPerPage.toString()
+        });
+        
+        if (searchTerm) params.append('search', searchTerm);
+        if (selectedCampaign !== 'all') params.append('campaign', selectedCampaign);
+        if (statusFilter !== 'all') params.append('status', statusFilter);
+        
+        const response = await apiRequest("GET", `/api/promo-codes?${params.toString()}`);
+        return response.json();
+      } else {
+        const response = await apiRequest("GET", "/api/promo-codes");
+        return response.json();
+      }
+    }
   });
+
+  // Extract codes and pagination info
+  const codes = Array.isArray(codesResponse) ? codesResponse : codesResponse?.data || [];
+  const totalPages = Array.isArray(codesResponse) ? 1 : codesResponse?.totalPages || 1;
+  const totalRecords = Array.isArray(codesResponse) ? codesResponse.length : codesResponse?.total || 0;
 
   // Fetch stats
   const { data: stats = { total: 0, used: 0, available: 0, expired: 0 } } = useQuery<{ total: number; used: number; available: number; expired: number }>({
@@ -298,48 +326,10 @@ export default function Home() {
     return new Date(date).toLocaleString();
   };
 
-  // Handle select all/none for bulk delete
-  const handleSelectAll = () => {
-    if (selectedCodes.length === filteredCodes.length) {
-      setSelectedCodes([]);
-    } else {
-      setSelectedCodes(filteredCodes.map(code => code.code));
-    }
-  };
-
-  // Handle individual code selection
-  const handleCodeSelect = (code: string) => {
-    if (selectedCodes.includes(code)) {
-      setSelectedCodes(selectedCodes.filter(c => c !== code));
-    } else {
-      setSelectedCodes([...selectedCodes, code]);
-    }
-  };
-
-  // Handle delete confirmation
-  const handleDeleteCode = (code: string) => {
-    setCodeToDelete(code);
-    setIsDeleteConfirmOpen(true);
-  };
-
-  // Confirm delete single code
-  const confirmDeleteCode = () => {
-    if (codeToDelete) {
-      deleteCodeMutation.mutate(codeToDelete);
-    }
-  };
-
-  // Confirm delete selected codes
-  const confirmDeleteSelected = () => {
-    if (selectedCodes.length > 0) {
-      deleteBulkMutation.mutate(selectedCodes);
-    }
-  };
-
-  // Download CSV functionality
+  // Download CSV functionality  
   const downloadCSV = () => {
     // Prepare CSV data
-    const csvData = filteredCodes.map(code => ({
+    const csvData = codes.map(code => ({
       Code: code.code,
       Status: code.status,
       Campaign: code.campaignName || '',
@@ -375,8 +365,46 @@ export default function Home() {
     
     toast({
       title: "CSV Downloaded",
-      description: `${filteredCodes.length} promo codes exported to CSV!`,
+      description: `${codes.length} promo codes exported to CSV!`,
     });
+  };
+
+  // Handle individual code selection
+  const handleCodeSelect = (code: string) => {
+    if (selectedCodes.includes(code)) {
+      setSelectedCodes(selectedCodes.filter(c => c !== code));
+    } else {
+      setSelectedCodes([...selectedCodes, code]);
+    }
+  };
+
+  // Handle delete confirmation
+  const handleDeleteCode = (code: string) => {
+    setCodeToDelete(code);
+    setIsDeleteConfirmOpen(true);
+  };
+
+  // Confirm delete single code
+  const confirmDeleteCode = () => {
+    if (codeToDelete) {
+      deleteCodeMutation.mutate(codeToDelete);
+    }
+  };
+
+  // Confirm delete selected codes
+  const confirmDeleteSelected = () => {
+    if (selectedCodes.length > 0) {
+      deleteBulkMutation.mutate(selectedCodes);
+    }
+  };
+
+  // Handle select all/none for bulk delete
+  const handleSelectAll = () => {
+    if (selectedCodes.length === codes.length) {
+      setSelectedCodes([]);
+    } else {
+      setSelectedCodes(codes.map(code => code.code));
+    }
   };
 
   // CSV Import functionality
@@ -778,15 +806,31 @@ export default function Home() {
                         </SelectContent>
                       </Select>
                       
+                      {/* Pagination Toggle */}
+                      <div className="flex items-center space-x-2">
+                        <Checkbox
+                          id="pagination-toggle"
+                          checked={usePagination}
+                          onCheckedChange={(checked) => {
+                            setUsePagination(!!checked);
+                            setCurrentPage(1);
+                          }}
+                          data-testid="checkbox-pagination"
+                        />
+                        <Label htmlFor="pagination-toggle" className="text-sm">
+                          Use Pagination ({totalRecords > 1000 ? 'Recommended' : 'Optional'})
+                        </Label>
+                      </div>
+                      
                       {/* CSV Download Button */}
                       <Button
                         onClick={downloadCSV}
                         variant="outline"
-                        disabled={filteredCodes.length === 0}
+                        disabled={codes.length === 0}
                         className="border-green-300 text-green-600 hover:bg-green-50 hover:text-green-700"
                       >
                         <Download className="mr-2 h-4 w-4" />
-                        CSV ({filteredCodes.length})
+                        CSV ({codes.length})
                       </Button>
                       
                       {/* CSV Import Button */}
@@ -925,7 +969,7 @@ export default function Home() {
                       <tr>
                         <th className="px-4 py-3 text-left">
                           <Checkbox
-                            checked={filteredCodes.length > 0 && selectedCodes.length === filteredCodes.length}
+                            checked={codes.length > 0 && selectedCodes.length === codes.length}
                             onCheckedChange={handleSelectAll}
                             className="mr-2"
                           />
@@ -946,14 +990,14 @@ export default function Home() {
                             Loading codes...
                           </td>
                         </tr>
-                      ) : filteredCodes.length === 0 ? (
+                      ) : codes.length === 0 ? (
                         <tr>
                           <td colSpan={8} className="px-4 py-4 text-center text-gray-500">
-                            {codes.length === 0 ? "No codes generated yet. Create your first campaign!" : "No codes match your filters"}
+                            {codes.length === 0 ? "No codes generated yet. Create your first campaign!" : "No codes found"}
                           </td>
                         </tr>
                       ) : (
-                        filteredCodes.map((code: PromoCode) => {
+                        codes.map((code: PromoCode) => {
                           const isExpired = code.expiresAt && new Date(code.expiresAt) < new Date();
                           const effectiveStatus = isExpired && code.status === "unused" ? "expired" : code.status;
                           
@@ -1048,12 +1092,62 @@ export default function Home() {
                   </table>
                 </div>
 
-                {/* Pagination placeholder */}
-                {filteredCodes.length > 0 && (
+                {/* Pagination Controls */}
+                {codes.length > 0 && (
                   <div className="bg-gray-50 px-6 py-3 border-t border-gray-200">
-                    <div className="text-sm text-gray-600">
-                      Showing {filteredCodes.length} of {codes.length} codes
-                    </div>
+                    {usePagination ? (
+                      <div className="flex items-center justify-between">
+                        <div className="text-sm text-gray-600">
+                          Showing {(currentPage - 1) * itemsPerPage + 1} to {Math.min(currentPage * itemsPerPage, totalRecords)} of {totalRecords} codes
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                            disabled={currentPage <= 1}
+                            data-testid="button-prev-page"
+                          >
+                            Previous
+                          </Button>
+                          <span className="text-sm text-gray-600">
+                            Page {currentPage} of {totalPages}
+                          </span>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                            disabled={currentPage >= totalPages}
+                            data-testid="button-next-page"
+                          >
+                            Next
+                          </Button>
+                          <Select 
+                            value={itemsPerPage.toString()} 
+                            onValueChange={(value) => {
+                              setItemsPerPage(Number(value));
+                              setCurrentPage(1);
+                            }}
+                          >
+                            <SelectTrigger className="w-20">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="50">50</SelectItem>
+                              <SelectItem value="100">100</SelectItem>
+                              <SelectItem value="200">200</SelectItem>
+                              <SelectItem value="500">500</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-sm text-gray-600">
+                        Showing all {codes.length} codes {totalRecords > 1000 && (
+                          <span className="text-amber-600 font-medium">(Consider enabling pagination for better performance)</span>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
               </CardContent>
