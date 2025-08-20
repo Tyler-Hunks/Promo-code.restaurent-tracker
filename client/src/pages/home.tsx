@@ -585,7 +585,10 @@ export default function Home() {
                           data-testid="button-generate-codes"
                         >
                           <Plus className="mr-2 h-4 w-4" />
-                          Generate {bulkCount} Code{bulkCount > 1 ? 's' : ''}
+                          {(generateSingleMutation.isPending || generateBulkMutation.isPending) 
+                            ? "Generating..." 
+                            : `Generate ${bulkCount} Code${bulkCount > 1 ? 's' : ''}`
+                          }
                         </Button>
                       </div>
                     </div>
