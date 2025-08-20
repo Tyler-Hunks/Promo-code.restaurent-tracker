@@ -511,7 +511,7 @@ export default function Home() {
                           <Input
                             type="number"
                             min="1"
-                            max="100"
+                            max="5000"
                             value={bulkCount}
                             onChange={(e) => setBulkCount(Number(e.target.value))}
                             data-testid="input-quantity"
@@ -639,7 +639,7 @@ export default function Home() {
                           <Input
                             type="number"
                             min="1"
-                            max="100"
+                            max="5000"
                             value={bulkCount}
                             onChange={(e) => setBulkCount(Number(e.target.value))}
                           />
