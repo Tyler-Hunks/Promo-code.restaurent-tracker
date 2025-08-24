@@ -2,6 +2,8 @@
 
 This is a promo code management system built with React, Express, TypeScript, and PostgreSQL. The application allows users to generate, view, and redeem promotional codes with different formatting options. It features a modern web interface built with shadcn/ui components and Tailwind CSS, backed by a REST API server and PostgreSQL database managed through Drizzle ORM.
 
+**Current Status**: Production-ready system deployed on Cloudflare Workers with Supabase PostgreSQL database, optimized for large datasets (10,000+ codes) with pagination, comprehensive download capabilities, and performance optimization features.
+
 # User Preferences
 
 Preferred communication style: Simple, everyday language.
@@ -17,23 +19,25 @@ Preferred communication style: Simple, everyday language.
 - **Forms**: React Hook Form with Zod validation via @hookform/resolvers
 
 ## Backend Architecture
-- **Framework**: Express.js with TypeScript
-- **Runtime**: Node.js with ES modules
+- **Framework**: Express.js with TypeScript running on Cloudflare Workers
+- **Runtime**: Cloudflare Workers with Node.js compatibility
 - **API Design**: RESTful API with JSON responses
 - **Error Handling**: Centralized error middleware with structured error responses
 - **Logging**: Custom request/response logging for API endpoints
 - **Build Process**: esbuild for production bundling
+- **Deployment**: Cloudflare Workers with GitHub integration for CI/CD
 
 ## Database Architecture
-- **Database**: PostgreSQL (Neon serverless) - ACTIVE PRODUCTION STORAGE
+- **Database**: PostgreSQL (Supabase) - ACTIVE PRODUCTION STORAGE
 - **ORM**: Drizzle ORM with drizzle-kit for schema management
-- **Connection**: Neon serverless PostgreSQL driver (@neondatabase/serverless)
+- **Connection**: Supabase PostgreSQL with postgres driver
 - **Schema Management**: Type-safe schema definitions with Zod validation
-- **Storage Implementation**: DatabaseStorage class replacing in-memory storage
+- **Storage Implementation**: DatabaseStorage class with optimized queries
 - **Tables**: 
   - Users table with UUID primary keys
   - Promo codes table with status tracking, automatic expiration, and full campaign support
-- **Features**: Automatic expired code detection, bulk operations, CSV import/export
+- **Features**: Automatic expired code detection, bulk operations, CSV import/export, pagination for large datasets
+- **Performance**: Optimized for 10,000+ codes with indexed queries and pagination
 
 ## Development Setup
 - **Development Server**: Vite dev server with HMR for frontend, tsx for backend hot reloading
