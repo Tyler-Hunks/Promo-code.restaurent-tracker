@@ -1,0 +1,69 @@
+npm warn ERESOLVE overriding peer dependency
+npm warn While resolving: rest-express@1.0.0
+npm warn Found: vite@7.1.3
+npm warn node_modules/vite
+npm warn   peer vite@"^4.2.0 || ^5.0.0 || ^6.0.0 || ^7.0.0" from @vitejs/plugin
+-react@4.7.0
+npm warn   node_modules/@vitejs/plugin-react
+npm warn     dev @vitejs/plugin-react@"^4.3.2" from the root project
+npm warn   1 more (the root project)
+npm warn
+npm warn Could not resolve dependency:
+npm warn peer vite@"^5.2.0 || ^6" from @tailwindcss/vite@4.1.3
+npm warn node_modules/@tailwindcss/vite
+npm warn   dev @tailwindcss/vite@"^4.1.3" from the root project
+npm error code ERESOLVE
+npm error ERESOLVE could not resolve
+npm error
+npm error While resolving: vite@7.1.3
+npm error Found: @types/node@20.16.11
+npm error node_modules/@types/node
+npm error   @types/node@"*" from @types/body-parser@1.19.5
+npm error   node_modules/@types/body-parser
+npm error     @types/body-parser@"*" from @types/express@4.17.21
+npm error     node_modules/@types/express
+npm error       @types/express@"*" from @types/connect-pg-simple@7.0.3
+npm error       node_modules/@types/connect-pg-simple
+npm error         dev @types/connect-pg-simple@"^7.0.3" from the root project
+npm error       5 more (@types/express-session, @types/passport, ...)
+npm error   @types/node@"*" from @types/connect@3.4.38
+npm error   node_modules/@types/connect
+npm error     @types/connect@"*" from @types/body-parser@1.19.5
+npm error     node_modules/@types/body-parser
+npm error       @types/body-parser@"*" from @types/express@4.17.21
+npm error       node_modules/@types/express
+npm error         @types/express@"*" from @types/connect-pg-simple@7.0.3
+npm error         node_modules/@types/connect-pg-simple
+npm error         5 more (@types/express-session, @types/passport, ...)
+npm error   6 more (@types/express-serve-static-core, @types/pg, ...)
+npm error
+npm error Could not resolve dependency:
+npm error peerOptional @types/node@"^20.19.0 || >=22.12.0" from vite@7.1.3
+npm error node_modules/vite
+npm error   dev vite@"7.1.3" from the root project
+npm error   peer vite@"^4.2.0 || ^5.0.0 || ^6.0.0 || ^7.0.0" from @vitejs/plugi
+n-react@4.7.0
+npm error   node_modules/@vitejs/plugin-react
+npm error     dev @vitejs/plugin-react@"^4.3.2" from the root project
+npm error
+npm error Conflicting peer dependency: @types/node@24.3.0
+npm error node_modules/@types/node
+npm error   peerOptional @types/node@"^20.19.0 || >=22.12.0" from vite@7.1.3
+npm error   node_modules/vite
+npm error     dev vite@"7.1.3" from the root project
+npm error     peer vite@"^4.2.0 || ^5.0.0 || ^6.0.0 || ^7.0.0" from @vitejs/plu
+gin-react@4.7.0
+npm error     node_modules/@vitejs/plugin-react
+npm error       dev @vitejs/plugin-react@"^4.3.2" from the root project
+npm error
+npm error Fix the upstream dependency conflict, or retry
+npm error this command with --force or --legacy-peer-deps
+npm error to accept an incorrect (and potentially broken) dependency resolution
+.
+npm error
+npm error
+npm error For a full report see:
+npm error C:\Users\Radon\AppData\Local\npm-cache\_logs\2025-08-24T07_53_14_756Z
+-eresolve-report.txt
+npm error A complete log of this run can be found in: C:\Users\Radon\AppData\Lo
+cal\npm-cache\_logs\2025-08-24T07_53_14_756Z-debug-0.log
