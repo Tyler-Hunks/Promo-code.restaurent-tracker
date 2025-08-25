@@ -134,13 +134,14 @@ wrangler login
 wrangler whoami
 ```
 
-#### 3.3 Build Frontend
+#### 3.3 Build Frontend with API Key
 ```bash
-# Build the React frontend for production
-npx vite build --config vite.config.cloudflare.ts
+# Build the React frontend with API key for authentication
+VITE_API_KEY=your-secure-api-key-here npx vite build --config vite.config.cloudflare.ts
 ```
+**Important**: Replace `your-secure-api-key-here` with the same API key you'll use for the backend.
 
-#### 3.4 Set Environment Secrets
+#### 3.4 Set Backend Runtime Secrets
 ```bash
 # Set each environment variable securely
 wrangler secret put DATABASE_URL
@@ -161,6 +162,28 @@ wrangler secret put API_KEY
 # Deploy the application
 wrangler deploy
 ```
+
+### Quick Reference: Update Live Deployment
+
+To update your live deployment with the frontend API key fix:
+
+1. **Build with API key**:
+```bash
+VITE_API_KEY=your-secure-api-key-here npx vite build --config vite.config.cloudflare.ts
+```
+
+2. **Ensure backend secrets are set** (only needed once):
+```bash
+wrangler secret put API_KEY
+# Enter the same API key as above
+```
+
+3. **Deploy**:
+```bash
+wrangler deploy
+```
+
+**Note**: You do NOT use `wrangler secret put VITE_API_KEY` because VITE_ variables are build-time only, not runtime secrets.
 
 ## Part 4: Testing Your Deployment
 
