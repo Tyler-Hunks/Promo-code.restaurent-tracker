@@ -16,9 +16,13 @@ export async function apiRequest(
   const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
   const fullUrl = url.startsWith('http') ? url : `${baseUrl}${url}`;
   
-  const headers: Record<string, string> = {
-    'x-api-key': import.meta.env.VITE_API_KEY || 'promo-manager-2024-secure-key', // API key for authentication
-  };
+  const headers: Record<string, string> = {};
+  
+  // Only add API key for admin operations (POST, DELETE, PATCH for admin routes)
+  const isAdminOperation = method !== 'GET' && !url.includes('/redeem');
+  if (isAdminOperation) {
+    headers['x-api-key'] = import.meta.env.VITE_API_KEY || 'promo-manager-2024-secure-key';
+  }
   
   if (data) {
     headers['Content-Type'] = 'application/json';
@@ -45,10 +49,8 @@ export const getQueryFn: <T>(options: {
     const url = queryKey.join("/") as string;
     const fullUrl = url.startsWith('http') ? url : `${baseUrl}${url}`;
     
+    // GET requests don't need API key anymore (public routes)
     const res = await fetch(fullUrl, {
-      headers: {
-        'x-api-key': import.meta.env.VITE_API_KEY || 'promo-manager-2024-secure-key', // API key for authentication
-      },
       credentials: "include",
     });
 

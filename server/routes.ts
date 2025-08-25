@@ -44,8 +44,8 @@ async function generateUniqueCode(format: string = "PROMO-XXXX"): Promise<string
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Apply API key authentication to all API routes
-  app.use('/api', requireApiKey);
+  // Apply API key authentication only to admin routes
+  // Public routes (viewing codes, stats, campaigns) don't need authentication
 
   // Get all promo codes with pagination and search
   app.get("/api/promo-codes", async (req, res) => {
@@ -96,8 +96,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Generate a single promo code
-  app.post("/api/promo-codes/generate", async (req, res) => {
+  // Generate a single promo code (Admin only - requires API key)
+  app.post("/api/promo-codes/generate", requireApiKey, async (req, res) => {
     try {
       const { format = "PROMO-XXXX", campaignName, discountValue, expiresAt } = req.body;
       const code = await generateUniqueCode(format);
@@ -126,8 +126,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Generate bulk promo codes
-  app.post("/api/promo-codes/generate-bulk", async (req, res) => {
+  // Generate bulk promo codes (Admin only - requires API key)
+  app.post("/api/promo-codes/generate-bulk", requireApiKey, async (req, res) => {
     try {
       const validation = bulkGenerateSchema.safeParse(req.body);
       if (!validation.success) {
@@ -179,7 +179,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Generate campaign codes
-  app.post("/api/promo-codes/generate-campaign", async (req, res) => {
+  app.post("/api/promo-codes/generate-campaign", requireApiKey, async (req, res) => {
     try {
       const validation = campaignGenerateSchema.safeParse(req.body);
       if (!validation.success) {
@@ -250,7 +250,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Delete a promo code
-  app.delete("/api/promo-codes/:code", async (req, res) => {
+  app.delete("/api/promo-codes/:code", requireApiKey, async (req, res) => {
     try {
       const { code } = req.params;
       const deleted = await storage.deletePromoCode(code);
@@ -266,7 +266,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Delete multiple promo codes
-  app.delete("/api/promo-codes", async (req, res) => {
+  app.delete("/api/promo-codes", requireApiKey, async (req, res) => {
     try {
       const { codes } = req.body;
       if (!Array.isArray(codes) || codes.length === 0) {
@@ -288,7 +288,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Delete all promo codes for optimization
-  app.delete("/api/promo-codes/all", async (req, res) => {
+  app.delete("/api/promo-codes/all", requireApiKey, async (req, res) => {
     try {
       const deletedCount = await storage.deleteAllPromoCodes();
       res.json({ 
@@ -305,7 +305,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Toggle promo code status
-  app.patch("/api/promo-codes/:code/toggle-status", async (req, res) => {
+  app.patch("/api/promo-codes/:code/toggle-status", requireApiKey, async (req, res) => {
     try {
       const { code } = req.params;
       const promoCode = await storage.getPromoCodeByCode(code);
@@ -336,7 +336,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Import promo codes from CSV
-  app.post("/api/promo-codes/import", async (req, res) => {
+  app.post("/api/promo-codes/import", requireApiKey, async (req, res) => {
     try {
       const validation = csvImportSchema.safeParse(req.body);
       if (!validation.success) {
