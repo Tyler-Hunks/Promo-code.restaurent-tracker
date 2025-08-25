@@ -122,6 +122,49 @@ This is normal. You can:
 
 ## Build Issues
 
+### Problem: Frontend shows 0 codes even though API has data
+
+**Symptoms:**
+- API logs show successful responses with data
+- Frontend displays empty state or zero counts
+- Browser console may show 401 unauthorized errors
+
+**Cause:** Frontend was built without API key, so it can't authenticate with backend
+
+**Solution:** Rebuild frontend with API key embedded
+```bash
+# This rebuilds ONLY the frontend with API key - it will NOT duplicate your webapp
+VITE_API_KEY=your-secure-api-key-here npx vite build --config vite.config.cloudflare.ts
+
+# Then deploy the updated build
+wrangler deploy
+```
+
+**What this command does:**
+- ✅ Builds frontend React app with API key embedded
+- ✅ Creates/overwrites `dist` folder with new files  
+- ✅ Does NOT deploy anything (just prepares files)
+- ✅ Does NOT duplicate your webapp
+- ✅ Safe to run multiple times
+
+**Process flow:**
+1. **Build** = Compile frontend → Creates `dist` folder
+2. **Deploy** = Upload `dist` to Cloudflare → Updates live site
+
+### Problem: Missing build script error
+```
+npm error Missing script: "build:cloudflare"
+```
+
+**Solution:** Use direct Vite command instead
+```bash
+# DON'T use this (script doesn't exist):
+npm run build:cloudflare
+
+# DO use this (direct command):
+npx vite build --config vite.config.cloudflare.ts
+```
+
 ### Problem: Build command fails with file not found
 
 ### Common filename typos:
