@@ -8,7 +8,6 @@ compatibility_flags = ["nodejs_compat"]
 [assets]
 directory = "dist"
 binding = "ASSETS"
-exclude = ["*.js", "*.map"]
 
 # Environment variables (set these in Cloudflare Dashboard)
 [vars]
