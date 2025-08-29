@@ -192,9 +192,9 @@ export class CloudflareStorage implements IStorage {
     }
 
     const total = allCodes.length;
-    const used = allCodes.filter(code => code.status === 'used').length;
-    const expired = allCodes.filter(code => code.status === 'expired').length;
-    const available = allCodes.filter(code => code.status === 'unused').length;
+    const used = allCodes.filter((code: any) => code.status === 'used').length;
+    const expired = allCodes.filter((code: any) => code.status === 'expired').length;
+    const available = allCodes.filter((code: any) => code.status === 'unused').length;
 
     return { total, used, available, expired };
   }
