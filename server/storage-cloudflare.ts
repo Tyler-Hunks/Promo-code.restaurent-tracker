@@ -16,6 +16,21 @@ export class CloudflareStorage implements IStorage {
     });
   }
 
+  // Helper to map database snake_case to frontend camelCase
+  private mapPromoCodeFromDb(dbRecord: any): PromoCode {
+    if (!dbRecord) return dbRecord;
+    return {
+      id: dbRecord.id,
+      code: dbRecord.code,
+      status: dbRecord.status,
+      campaignName: dbRecord.campaign_name,
+      discountValue: dbRecord.discount_value,
+      expiresAt: dbRecord.expires_at ? new Date(dbRecord.expires_at) : null,
+      createdAt: new Date(dbRecord.created_at),
+      usedAt: dbRecord.used_at ? new Date(dbRecord.used_at) : null,
+    };
+  }
+
   async getUser(id: string): Promise<User | undefined> {
     const { data: user } = await this.supabase
       .from('users')
@@ -48,7 +63,7 @@ export class CloudflareStorage implements IStorage {
       .from('promo_codes')
       .select('*')
       .order('created_at', { ascending: false });
-    return codes || [];
+    return (codes || []).map(code => this.mapPromoCodeFromDb(code));
   }
 
   async getPaginatedPromoCodes(options: PaginationOptions): Promise<PaginatedResult<PromoCode>> {
@@ -74,7 +89,7 @@ export class CloudflareStorage implements IStorage {
     const { data, count } = await query.range(offset, offset + options.limit - 1);
 
     return {
-      data: data || [],
+      data: (data || []).map(code => this.mapPromoCodeFromDb(code)),
       total: count || 0,
       page: options.page,
       limit: options.limit,
@@ -88,7 +103,7 @@ export class CloudflareStorage implements IStorage {
       .select('*')
       .eq('code', code)
       .single();
-    return promoCode || undefined;
+    return promoCode ? this.mapPromoCodeFromDb(promoCode) : undefined;
   }
 
   async createPromoCode(promoCode: InsertPromoCode): Promise<PromoCode> {
@@ -103,7 +118,9 @@ export class CloudflareStorage implements IStorage {
       })
       .select()
       .single();
-    return created;
+    
+    // Convert snake_case to camelCase for frontend compatibility
+    return this.mapPromoCodeFromDb(created);
   }
 
   async createBulkPromoCodes(promoCodeArray: InsertPromoCode[]): Promise<PromoCode[]> {
@@ -119,7 +136,7 @@ export class CloudflareStorage implements IStorage {
       .from('promo_codes')
       .insert(insertData)
       .select();
-    return created || [];
+    return (created || []).map(code => this.mapPromoCodeFromDb(code));
   }
 
   async markPromoCodeAsUsed(code: string): Promise<PromoCode | undefined> {
@@ -132,7 +149,7 @@ export class CloudflareStorage implements IStorage {
       .eq('code', code)
       .select()
       .single();
-    return updated || undefined;
+    return updated ? this.mapPromoCodeFromDb(updated) : undefined;
   }
 
   async togglePromoCodeStatus(code: string, newStatus: "unused" | "used"): Promise<PromoCode | undefined> {
@@ -145,7 +162,7 @@ export class CloudflareStorage implements IStorage {
       .eq('code', code)
       .select()
       .single();
-    return updated || undefined;
+    return updated ? this.mapPromoCodeFromDb(updated) : undefined;
   }
 
   async deletePromoCode(code: string): Promise<boolean> {
