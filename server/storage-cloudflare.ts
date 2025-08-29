@@ -1,126 +1,214 @@
-import { type User, type InsertUser, type PromoCode, type InsertPromoCode, users, promoCodes } from "@shared/schema";
-import { drizzle } from 'drizzle-orm/postgres-js';
-import postgres from 'postgres';
-import { eq, sql, and } from "drizzle-orm";
-import type { IStorage } from "./storage";
+import { type User, type InsertUser, type PromoCode, type InsertPromoCode } from "@shared/schema";
+import { createClient } from '@supabase/supabase-js';
+import type { IStorage, PaginationOptions, PaginatedResult } from "./storage";
 
 // Cloudflare-compatible database storage
 export class CloudflareStorage implements IStorage {
-  private db: any;
+  private supabase: any;
 
   constructor(env: any) {
-    // Initialize database connection with Supabase/PostgreSQL
-    const client = postgres(env.DATABASE_URL);
-    this.db = drizzle(client, { schema: { users, promoCodes } });
+    // Initialize Supabase client for Cloudflare Workers
+    this.supabase = createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false
+      }
+    });
   }
 
   async getUser(id: string): Promise<User | undefined> {
-    const [user] = await this.db.select().from(users).where(eq(users.id, id));
+    const { data: user } = await this.supabase
+      .from('users')
+      .select('*')
+      .eq('id', id)
+      .single();
     return user || undefined;
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    const [user] = await this.db.select().from(users).where(eq(users.username, username));
+    const { data: user } = await this.supabase
+      .from('users')
+      .select('*')
+      .eq('username', username)
+      .single();
     return user || undefined;
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    const [user] = await this.db
-      .insert(users)
-      .values(insertUser)
-      .returning();
+    const { data: user } = await this.supabase
+      .from('users')
+      .insert(insertUser)
+      .select()
+      .single();
     return user;
   }
 
   async getAllPromoCodes(): Promise<PromoCode[]> {
-    const codes = await this.db.select().from(promoCodes).orderBy(sql`${promoCodes.createdAt} DESC`);
-    return codes;
+    const { data: codes } = await this.supabase
+      .from('promo_codes')
+      .select('*')
+      .order('created_at', { ascending: false });
+    return codes || [];
+  }
+
+  async getPaginatedPromoCodes(options: PaginationOptions): Promise<PaginatedResult<PromoCode>> {
+    let query = this.supabase
+      .from('promo_codes')
+      .select('*', { count: 'exact' })
+      .order('created_at', { ascending: false });
+
+    if (options.search) {
+      query = query.or(`code.ilike.%${options.search}%,campaign_name.ilike.%${options.search}%`);
+    }
+    if (options.campaign) {
+      query = query.eq('campaign_name', options.campaign);
+    }
+    if (options.status) {
+      query = query.eq('status', options.status);
+    }
+    if (options.discount) {
+      query = query.ilike('discount_value', `%${options.discount}%`);
+    }
+
+    const offset = (options.page - 1) * options.limit;
+    const { data, count } = await query.range(offset, offset + options.limit - 1);
+
+    return {
+      data: data || [],
+      total: count || 0,
+      page: options.page,
+      limit: options.limit,
+      totalPages: Math.ceil((count || 0) / options.limit)
+    };
   }
 
   async getPromoCodeByCode(code: string): Promise<PromoCode | undefined> {
-    const [promoCode] = await this.db.select().from(promoCodes).where(eq(promoCodes.code, code));
+    const { data: promoCode } = await this.supabase
+      .from('promo_codes')
+      .select('*')
+      .eq('code', code)
+      .single();
     return promoCode || undefined;
   }
 
   async createPromoCode(promoCode: InsertPromoCode): Promise<PromoCode> {
-    const [created] = await this.db
-      .insert(promoCodes)
-      .values(promoCode)
-      .returning();
+    const { data: created } = await this.supabase
+      .from('promo_codes')
+      .insert({
+        code: promoCode.code,
+        campaign_name: promoCode.campaignName,
+        discount_value: promoCode.discountValue,
+        expires_at: promoCode.expiresAt,
+        status: 'unused'
+      })
+      .select()
+      .single();
     return created;
   }
 
   async createBulkPromoCodes(promoCodeArray: InsertPromoCode[]): Promise<PromoCode[]> {
-    const created = await this.db
-      .insert(promoCodes)
-      .values(promoCodeArray)
-      .returning();
-    return created;
+    const insertData = promoCodeArray.map(code => ({
+      code: code.code,
+      campaign_name: code.campaignName,
+      discount_value: code.discountValue,
+      expires_at: code.expiresAt,
+      status: 'unused'
+    }));
+    
+    const { data: created } = await this.supabase
+      .from('promo_codes')
+      .insert(insertData)
+      .select();
+    return created || [];
   }
 
   async markPromoCodeAsUsed(code: string): Promise<PromoCode | undefined> {
-    const [updated] = await this.db
-      .update(promoCodes)
-      .set({ 
-        status: "used", 
-        usedAt: new Date() 
+    const { data: updated } = await this.supabase
+      .from('promo_codes')
+      .update({ 
+        status: 'used', 
+        used_at: new Date().toISOString() 
       })
-      .where(eq(promoCodes.code, code))
-      .returning();
+      .eq('code', code)
+      .select()
+      .single();
+    return updated || undefined;
+  }
+
+  async togglePromoCodeStatus(code: string, newStatus: "unused" | "used"): Promise<PromoCode | undefined> {
+    const { data: updated } = await this.supabase
+      .from('promo_codes')
+      .update({ 
+        status: newStatus,
+        used_at: newStatus === 'used' ? new Date().toISOString() : null
+      })
+      .eq('code', code)
+      .select()
+      .single();
     return updated || undefined;
   }
 
   async deletePromoCode(code: string): Promise<boolean> {
-    const result = await this.db
-      .delete(promoCodes)
-      .where(eq(promoCodes.code, code));
-    return (result.rowCount || 0) > 0;
+    const { error } = await this.supabase
+      .from('promo_codes')
+      .delete()
+      .eq('code', code);
+    return !error;
   }
 
   async deleteBulkPromoCodes(codes: string[]): Promise<number> {
-    const result = await this.db
-      .delete(promoCodes)
-      .where(sql`${promoCodes.code} = ANY(${codes})`);
-    return result.rowCount || 0;
+    const { data: deletedCodes } = await this.supabase
+      .from('promo_codes')
+      .delete()
+      .in('code', codes)
+      .select('id');
+    return deletedCodes?.length || 0;
   }
 
   async deleteAllPromoCodes(): Promise<number> {
-    const result = await this.db.delete(promoCodes);
-    return result.rowCount || 0;
+    const { data: deletedCodes } = await this.supabase
+      .from('promo_codes')
+      .delete()
+      .neq('id', 'non-existent-id')
+      .select('id');
+    return deletedCodes?.length || 0;
   }
 
   async getPromoCodeStats(): Promise<{ total: number; used: number; available: number; expired: number }> {
     // Update expired codes first
-    await this.db
-      .update(promoCodes)
-      .set({ status: "expired" })
-      .where(
-        and(
-          sql`${promoCodes.expiresAt} < NOW()`,
-          eq(promoCodes.status, "unused")
-        )
-      );
+    await this.supabase
+      .from('promo_codes')
+      .update({ status: 'expired' })
+      .lt('expires_at', new Date().toISOString())
+      .eq('status', 'unused');
 
-    // Get stats
-    const [stats] = await this.db
-      .select({
-        total: sql<number>`COUNT(*)::int`,
-        used: sql<number>`COUNT(CASE WHEN ${promoCodes.status} = 'used' THEN 1 END)::int`,
-        expired: sql<number>`COUNT(CASE WHEN ${promoCodes.status} = 'expired' THEN 1 END)::int`,
-        available: sql<number>`COUNT(CASE WHEN ${promoCodes.status} = 'unused' THEN 1 END)::int`,
-      })
-      .from(promoCodes);
+    // Get all codes and count by status
+    const { data: allCodes } = await this.supabase
+      .from('promo_codes')
+      .select('status');
 
-    return stats;
+    if (!allCodes) {
+      return { total: 0, used: 0, available: 0, expired: 0 };
+    }
+
+    const total = allCodes.length;
+    const used = allCodes.filter(code => code.status === 'used').length;
+    const expired = allCodes.filter(code => code.status === 'expired').length;
+    const available = allCodes.filter(code => code.status === 'unused').length;
+
+    return { total, used, available, expired };
   }
 
   async getCampaigns(): Promise<string[]> {
-    const campaigns = await this.db
-      .selectDistinct({ name: promoCodes.campaignName })
-      .from(promoCodes)
-      .where(sql`${promoCodes.campaignName} IS NOT NULL`);
+    const { data: campaigns } = await this.supabase
+      .from('promo_codes')
+      .select('campaign_name')
+      .not('campaign_name', 'is', null);
     
-    return campaigns.map(c => c.name).filter(Boolean) as string[];
+    if (!campaigns) return [];
+    
+    const uniqueNames = new Set(campaigns.map((c: any) => c.campaign_name));
+    return Array.from(uniqueNames).filter(Boolean) as string[];
   }
 
   async importPromoCodes(promoCodeArray: InsertPromoCode[]): Promise<{ imported: number; skipped: number; errors: string[] }> {
