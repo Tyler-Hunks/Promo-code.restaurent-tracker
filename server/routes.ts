@@ -55,6 +55,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const search = req.query.search as string || '';
       const campaign = req.query.campaign as string || '';
       const status = req.query.status as string || '';
+      const discount = req.query.discount as string || '';
       
       // Handle export=all parameter for downloading all codes
       if (req.query.export === 'all') {
@@ -76,7 +77,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         limit: Math.min(limit, 1000), // Cap at 1000 per page
         search,
         campaign,
-        status
+        status,
+        discount
       });
       
       res.json(result);

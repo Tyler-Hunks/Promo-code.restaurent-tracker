@@ -27,6 +27,7 @@ export default function Home() {
   const [discountValue, setDiscountValue] = useState("");
   const [expirationDate, setExpirationDate] = useState("");
   const [selectedCampaign, setSelectedCampaign] = useState("all");
+  const [discountFilter, setDiscountFilter] = useState("");
   const [selectedCodes, setSelectedCodes] = useState<string[]>([]);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [codeToDelete, setCodeToDelete] = useState<string | null>(null);
@@ -41,7 +42,7 @@ export default function Home() {
 
   // Fetch promo codes (with optional pagination)
   const { data: codesResponse, isLoading: isLoadingCodes } = useQuery<PromoCode[] | { data: PromoCode[]; total: number; page: number; totalPages: number }>({
-    queryKey: usePagination ? ["/api/promo-codes", currentPage, itemsPerPage, searchTerm, selectedCampaign, statusFilter] : ["/api/promo-codes"],
+    queryKey: usePagination ? ["/api/promo-codes", currentPage, itemsPerPage, searchTerm, selectedCampaign, statusFilter, discountFilter] : ["/api/promo-codes"],
     queryFn: async () => {
       if (usePagination) {
         const params = new URLSearchParams({
@@ -52,6 +53,7 @@ export default function Home() {
         if (searchTerm) params.append('search', searchTerm);
         if (selectedCampaign !== 'all') params.append('campaign', selectedCampaign);
         if (statusFilter !== 'all') params.append('status', statusFilter);
+        if (discountFilter) params.append('discount', discountFilter);
         
         const response = await apiRequest("GET", `/api/promo-codes?${params.toString()}`);
         return response.json();
@@ -315,14 +317,9 @@ export default function Home() {
     },
   });
 
-  // Filter codes based on search, status, and campaign
-  const filteredCodes = codes.filter((code: PromoCode) => {
-    const matchesSearch = code.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (code.campaignName && code.campaignName.toLowerCase().includes(searchTerm.toLowerCase()));
-    const matchesStatus = statusFilter === "all" || code.status === statusFilter;
-    const matchesCampaign = selectedCampaign === "all" || code.campaignName === selectedCampaign;
-    return matchesSearch && matchesStatus && matchesCampaign;
-  });
+  // Use codes directly from API (already filtered and paginated)
+  // No need for client-side filtering since backend handles this
+  const filteredCodes = codes;
 
   // Copy to clipboard
   const copyToClipboard = async (text: string) => {
@@ -930,6 +927,15 @@ export default function Home() {
                           <SelectItem value="expired">Expired</SelectItem>
                         </SelectContent>
                       </Select>
+                      
+                      {/* Discount Filter */}
+                      <Input
+                        placeholder="Filter by discount..."
+                        value={discountFilter}
+                        onChange={(e) => setDiscountFilter(e.target.value)}
+                        className="w-full sm:w-40"
+                        data-testid="input-discount-filter"
+                      />
                       
                       {/* Pagination Toggle */}
                       <div className="flex items-center space-x-2">

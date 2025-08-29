@@ -9,6 +9,7 @@ export interface PaginationOptions {
   search?: string;
   campaign?: string;
   status?: string;
+  discount?: string;
 }
 
 export interface PaginatedResult<T> {
@@ -91,6 +92,13 @@ export class MemStorage implements IStorage {
     
     if (options.status) {
       allCodes = allCodes.filter(code => code.status === options.status);
+    }
+    
+    if (options.discount) {
+      const discountLower = options.discount.toLowerCase();
+      allCodes = allCodes.filter(code => 
+        code.discountValue && code.discountValue.toLowerCase().includes(discountLower)
+      );
     }
     
     // Sort by creation date
@@ -312,6 +320,12 @@ export class DatabaseStorage implements IStorage {
     
     if (options.status) {
       conditions.push(eq(promoCodes.status, options.status as any));
+    }
+    
+    if (options.discount) {
+      conditions.push(
+        sql`${promoCodes.discountValue} ILIKE ${'%' + options.discount + '%'}`
+      );
     }
 
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
