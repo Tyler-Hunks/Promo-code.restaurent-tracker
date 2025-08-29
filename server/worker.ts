@@ -120,10 +120,42 @@ async function handleAPI(request: Request, env: Env): Promise<Response> {
   const storageInstance = storage(env);
 
   try {
-    // Route handling
+    // Route handling  
     if (path === '/api/promo-codes' && method === 'GET') {
-      const codes = await storageInstance.getAllPromoCodes();
-      return new Response(JSON.stringify(codes), {
+      const urlParams = new URLSearchParams(url.search);
+      const page = parseInt(urlParams.get('page') || '1');
+      const limit = parseInt(urlParams.get('limit') || '100');
+      const search = urlParams.get('search') || '';
+      const campaign = urlParams.get('campaign') || '';
+      const status = urlParams.get('status') || '';
+      const discount = urlParams.get('discount') || '';
+      
+      // Handle export=all parameter for downloading all codes
+      if (urlParams.get('export') === 'all') {
+        const codes = await storageInstance.getAllPromoCodes();
+        return new Response(JSON.stringify(codes), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+      
+      // If no pagination requested, use legacy behavior
+      if (!urlParams.get('page') && !urlParams.get('limit')) {
+        const codes = await storageInstance.getAllPromoCodes();
+        return new Response(JSON.stringify(codes), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+      
+      const result = await storageInstance.getPaginatedPromoCodes({
+        page,
+        limit: Math.min(limit, 1000),
+        search,
+        campaign,
+        status,
+        discount
+      });
+      
+      return new Response(JSON.stringify(result), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
@@ -161,18 +193,7 @@ async function handleAPI(request: Request, env: Env): Promise<Response> {
 
     if (path === '/api/promo-codes/generate-bulk' && method === 'POST') {
       const body = await request.json();
-      const validation = bulkGenerateSchema.safeParse(body);
-      
-      if (!validation.success) {
-        return new Response(JSON.stringify({ 
-          message: "Invalid bulk generation parameters" 
-        }), {
-          status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        });
-      }
-
-      const { count, format, campaignName, discountValue, expiresAt } = validation.data;
+      const { count, format, campaignName, discountValue, expiresAt } = body;
       const codes: string[] = [];
 
       // Generate unique codes
@@ -194,7 +215,93 @@ async function handleAPI(request: Request, env: Env): Promise<Response> {
       });
     }
 
-    // Additional routes can be added here...
+    if (path === '/api/promo-codes/generate-campaign' && method === 'POST') {
+      const body = await request.json();
+      const { campaignName, discountValue, count, format, expiresAt } = body;
+      const codes: string[] = [];
+
+      // Generate unique codes
+      for (let i = 0; i < count; i++) {
+        const code = await generateUniqueCode(format, env);
+        codes.push(code);
+      }
+
+      const insertData = codes.map(code => ({ 
+        code, 
+        campaignName, 
+        discountValue, 
+        expiresAt: expiresAt ? new Date(expiresAt) : undefined 
+      }));
+      
+      const promoCodes = await storageInstance.createBulkPromoCodes(insertData);
+      return new Response(JSON.stringify(promoCodes), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    // Redeem promo code
+    if (path.startsWith('/api/promo-codes/') && path.endsWith('/redeem') && method === 'PATCH') {
+      const code = path.split('/')[3];
+      const updated = await storageInstance.markPromoCodeAsUsed(code);
+      
+      if (!updated) {
+        return new Response(JSON.stringify({ message: "Promo code not found or already used" }), {
+          status: 404,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      return new Response(JSON.stringify({ message: "Promo code redeemed successfully", promoCode: updated }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    // Toggle promo code status
+    if (path.startsWith('/api/promo-codes/') && path.endsWith('/toggle-status') && method === 'PATCH') {
+      const code = path.split('/')[3];
+      const promoCode = await storageInstance.getPromoCodeByCode(code);
+      
+      if (!promoCode) {
+        return new Response(JSON.stringify({ message: "Promo code not found" }), {
+          status: 404,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      if (promoCode.status === "expired") {
+        return new Response(JSON.stringify({ message: "Cannot toggle expired promo codes" }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      const newStatus = promoCode.status === "unused" ? "used" : "unused";
+      const updatedPromoCode = await storageInstance.togglePromoCodeStatus(code, newStatus);
+      
+      return new Response(JSON.stringify({
+        message: `Promo code status changed to ${newStatus}`,
+        promoCode: updatedPromoCode
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    // Delete single promo code
+    if (path.startsWith('/api/promo-codes/') && !path.includes('/redeem') && !path.includes('/toggle-status') && method === 'DELETE') {
+      const code = path.split('/')[3];
+      const deleted = await storageInstance.deletePromoCode(code);
+      
+      if (!deleted) {
+        return new Response(JSON.stringify({ message: "Promo code not found" }), {
+          status: 404,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      return new Response(JSON.stringify({ message: "Promo code deleted successfully", code }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
 
     return new Response(JSON.stringify({ message: 'Route not found' }), {
       status: 404,
