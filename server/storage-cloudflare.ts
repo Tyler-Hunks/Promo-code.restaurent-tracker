@@ -63,7 +63,7 @@ export class CloudflareStorage implements IStorage {
       .from('promo_codes')
       .select('*')
       .order('created_at', { ascending: false });
-    return (codes || []).map(code => this.mapPromoCodeFromDb(code));
+    return (codes || []).map((code: any) => this.mapPromoCodeFromDb(code));
   }
 
   async getPaginatedPromoCodes(options: PaginationOptions): Promise<PaginatedResult<PromoCode>> {
@@ -89,7 +89,7 @@ export class CloudflareStorage implements IStorage {
     const { data, count } = await query.range(offset, offset + options.limit - 1);
 
     return {
-      data: (data || []).map(code => this.mapPromoCodeFromDb(code)),
+      data: (data || []).map((code: any) => this.mapPromoCodeFromDb(code)),
       total: count || 0,
       page: options.page,
       limit: options.limit,
@@ -136,7 +136,7 @@ export class CloudflareStorage implements IStorage {
       .from('promo_codes')
       .insert(insertData)
       .select();
-    return (created || []).map(code => this.mapPromoCodeFromDb(code));
+    return (created || []).map((code: any) => this.mapPromoCodeFromDb(code));
   }
 
   async markPromoCodeAsUsed(code: string): Promise<PromoCode | undefined> {
