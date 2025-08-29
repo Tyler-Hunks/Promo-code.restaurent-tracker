@@ -11,32 +11,46 @@ interface Env {
 }
 
 // Serve static files (built React app)
-async function handleStatic(request: Request): Promise<Response> {
-  // This will be configured to serve from static assets
+async function handleStatic(request: Request, env: any): Promise<Response> {
   const url = new URL(request.url);
   
-  // Default to index.html for SPA routing
-  if (url.pathname === '/' || !url.pathname.includes('.')) {
-    return new Response(
-      `<!DOCTYPE html>
+  // Try to serve the asset first
+  try {
+    const asset = await env.ASSETS.fetch(request);
+    if (asset.status !== 404) {
+      return asset;
+    }
+  } catch (error) {
+    console.log('Asset fetch error:', error);
+  }
+  
+  // For SPA routing - serve index.html for non-asset routes
+  if (!url.pathname.includes('.') || url.pathname === '/') {
+    try {
+      const indexRequest = new Request(new URL('/index.html', request.url), request);
+      return await env.ASSETS.fetch(indexRequest);
+    } catch (error) {
+      console.log('Index.html fetch error:', error);
+      // Fallback HTML if assets don't work
+      return new Response(
+        `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Promo Code Manager</title>
-  <link rel="icon" type="image/svg+xml" href="/vite.svg" />
 </head>
 <body>
   <div id="root"></div>
-  <script type="module" src="/assets/index.js"></script>
-  <link rel="stylesheet" href="/assets/index.css">
+  <p>Loading application...</p>
 </body>
 </html>`,
-      { headers: { 'Content-Type': 'text/html' } }
-    );
+        { headers: { 'Content-Type': 'text/html' } }
+      );
+    }
   }
   
-  return new Response('Static file', { status: 404 });
+  return new Response('Not found', { status: 404 });
 }
 
 // API Key Authentication
@@ -209,6 +223,6 @@ export default {
     }
     
     // Serve static files (React app)
-    return handleStatic(request);
+    return handleStatic(request, env);
   },
 };
