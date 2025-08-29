@@ -13,7 +13,9 @@ export async function apiRequest(
   data?: unknown | undefined,
 ): Promise<Response> {
   // For production, use environment-specific API base URL
-  const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
+  // If no VITE_API_BASE_URL is set, use current origin (for Cloudflare Workers)
+  const baseUrl = import.meta.env.VITE_API_BASE_URL || 
+    (typeof window !== 'undefined' ? window.location.origin : '');
   const fullUrl = url.startsWith('http') ? url : `${baseUrl}${url}`;
   
   const headers: Record<string, string> = {
@@ -41,7 +43,9 @@ export const getQueryFn: <T>(options: {
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
-    const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
+    // If no VITE_API_BASE_URL is set, use current origin (for Cloudflare Workers)
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || 
+      (typeof window !== 'undefined' ? window.location.origin : '');
     const url = queryKey.join("/") as string;
     const fullUrl = url.startsWith('http') ? url : `${baseUrl}${url}`;
     
