@@ -1,5 +1,45 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
+// Token management
+const TOKEN_KEY = 'promo_app_token';
+
+export function getStoredToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem(TOKEN_KEY);
+}
+
+export function setStoredToken(token: string): void {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(TOKEN_KEY, token);
+}
+
+export function removeStoredToken(): void {
+  if (typeof window === 'undefined') return;
+  localStorage.removeItem(TOKEN_KEY);
+}
+
+export async function loginWithApiKey(apiKey: string): Promise<{ token: string; expiresIn: number }> {
+  const baseUrl = import.meta.env.VITE_API_BASE_URL || 
+    (typeof window !== 'undefined' ? window.location.origin : '');
+    
+  const response = await fetch(`${baseUrl}/api/auth/login`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ apiKey })
+  });
+  
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(error || 'Login failed');
+  }
+  
+  const result = await response.json();
+  setStoredToken(result.token);
+  return result;
+}
+
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
     const text = (await res.text()) || res.statusText;
@@ -18,9 +58,13 @@ export async function apiRequest(
     (typeof window !== 'undefined' ? window.location.origin : '');
   const fullUrl = url.startsWith('http') ? url : `${baseUrl}${url}`;
   
-  const headers: Record<string, string> = {
-    'x-api-key': import.meta.env.VITE_API_KEY || 'promo-manager-2024-secure-key', // API key for authentication
-  };
+  const headers: Record<string, string> = {};
+  
+  // Add Authorization header if token exists
+  const token = getStoredToken();
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
   
   if (data) {
     headers['Content-Type'] = 'application/json';
@@ -49,10 +93,14 @@ export const getQueryFn: <T>(options: {
     const url = queryKey.join("/") as string;
     const fullUrl = url.startsWith('http') ? url : `${baseUrl}${url}`;
     
+    const headers: Record<string, string> = {};
+    const token = getStoredToken();
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    
     const res = await fetch(fullUrl, {
-      headers: {
-        'x-api-key': import.meta.env.VITE_API_KEY || 'promo-manager-2024-secure-key', // API key for authentication
-      },
+      headers,
       credentials: "include",
     });
 

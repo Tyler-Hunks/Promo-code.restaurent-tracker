@@ -53,19 +53,43 @@ async function handleStatic(request: Request, env: any): Promise<Response> {
   return new Response('Not found', { status: 404 });
 }
 
-// API Key Authentication
-function requireApiKey(request: Request, env: Env) {
-  const apiKey = request.headers.get('x-api-key');
-  const expectedApiKey = env.API_KEY || 'promo-manager-2024-secure-key';
+// Generate secure token
+function generateSecureToken(): string {
+  const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  let token = '';
+  for (let i = 0; i < 32; i++) {
+    token += characters.charAt(Math.floor(Math.random() * characters.length));
+  }
+  return token;
+}
+
+// Store active tokens (in production, use KV storage)
+const activeTokens = new Set<string>();
+
+// Bearer Token Authentication
+function requireAuth(request: Request, env: Env) {
+  const authHeader = request.headers.get('Authorization');
   
-  if (!apiKey || apiKey !== expectedApiKey) {
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return new Response(JSON.stringify({ 
-      message: 'Unauthorized: Valid API key required'
+      message: 'Unauthorized: Bearer token required'
     }), {
       status: 401,
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
     });
   }
+  
+  const token = authHeader.substring(7); // Remove 'Bearer ' prefix
+  
+  if (!activeTokens.has(token)) {
+    return new Response(JSON.stringify({ 
+      message: 'Unauthorized: Invalid token'
+    }), {
+      status: 401,
+      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+    });
+  }
+  
   return null;
 }
 
@@ -73,7 +97,7 @@ function requireApiKey(request: Request, env: Env) {
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, PATCH, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, x-api-key',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
   'Cache-Control': 'no-cache, no-store, must-revalidate',
   'Pragma': 'no-cache',
   'Expires': '0'
@@ -116,8 +140,38 @@ async function handleAPI(request: Request, env: Env): Promise<Response> {
     return new Response(null, { status: 200, headers: corsHeaders });
   }
 
-  // Check API key
-  const authError = requireApiKey(request, env);
+  // Handle login endpoint (no auth required)
+  if (path === '/api/auth/login' && method === 'POST') {
+    try {
+      const body = await request.json() as any;
+      const { apiKey } = body;
+      
+      // Verify the API key (stored securely in Worker env)
+      if (apiKey !== env.API_KEY) {
+        return new Response(JSON.stringify({ message: 'Invalid API key' }), {
+          status: 401,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+      
+      // Generate secure token
+      const token = generateSecureToken();
+      activeTokens.add(token);
+      
+      return new Response(JSON.stringify({ token, expiresIn: 86400 }), {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    } catch (error) {
+      return new Response(JSON.stringify({ message: 'Invalid request' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+  }
+  
+  // Check Bearer token for all other API routes
+  const authError = requireAuth(request, env);
   if (authError) return authError;
 
   const storageInstance = storage(env);
