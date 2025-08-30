@@ -133,22 +133,30 @@ async function handleAPI(request: Request, env: Env): Promise<Response> {
       const status = urlParams.get('status') || '';
       const discount = urlParams.get('discount') || '';
       
+      console.log('Promo codes request params:', { page, limit, search, campaign, status, discount });
+      
       // Handle export=all parameter for downloading all codes
       if (urlParams.get('export') === 'all') {
+        console.log('Export all codes requested');
         const codes = await storageInstance.getAllPromoCodes();
         return new Response(JSON.stringify(codes), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         });
       }
       
-      // If no pagination requested, use legacy behavior
-      if (!urlParams.get('page') && !urlParams.get('limit')) {
+      // Check if pagination is requested (if either page or limit is explicitly set)
+      const hasPagination = urlParams.has('page') || urlParams.has('limit');
+      console.log('Pagination check:', { hasPagination, hasPage: urlParams.has('page'), hasLimit: urlParams.has('limit') });
+      
+      if (!hasPagination) {
+        console.log('No pagination - returning all codes');
         const codes = await storageInstance.getAllPromoCodes();
         return new Response(JSON.stringify(codes), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         });
       }
       
+      console.log('Using pagination with params:', { page, limit });
       const result = await storageInstance.getPaginatedPromoCodes({
         page,
         limit: Math.min(limit, 1000),
@@ -158,6 +166,7 @@ async function handleAPI(request: Request, env: Env): Promise<Response> {
         discount
       });
       
+      console.log('Pagination result:', { dataLength: result.data.length, total: result.total, page: result.page });
       return new Response(JSON.stringify(result), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
