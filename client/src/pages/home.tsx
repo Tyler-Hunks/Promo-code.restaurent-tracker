@@ -41,7 +41,7 @@ export default function Home() {
   const [usePagination, setUsePagination] = useState(true);
 
   // Fetch promo codes (with optional pagination)
-  const { data: codesResponse, isLoading: isLoadingCodes } = useQuery<PromoCode[] | { data: PromoCode[]; total: number; page: number; totalPages: number }>({
+  const { data: codesResponse, isLoading: isLoadingCodes, error: codesError } = useQuery<PromoCode[] | { data: PromoCode[]; total: number; page: number; totalPages: number }>({
     queryKey: usePagination ? ["/api/promo-codes", currentPage, itemsPerPage, searchTerm, selectedCampaign, statusFilter, discountFilter] : ["/api/promo-codes"],
     queryFn: async () => {
       if (usePagination) {
@@ -63,6 +63,7 @@ export default function Home() {
       }
     }
   });
+
 
   // Extract codes and pagination info
   const codes = Array.isArray(codesResponse) ? codesResponse : codesResponse?.data || [];
@@ -1177,6 +1178,23 @@ export default function Home() {
                         <tr>
                           <td colSpan={8} className="px-4 py-4 text-center text-gray-500">
                             Loading codes...
+                          </td>
+                        </tr>
+                      ) : codesError ? (
+                        <tr>
+                          <td colSpan={8} className="px-4 py-4 text-center">
+                            <div className="text-red-600">
+                              <p className="font-medium">Error loading codes</p>
+                              <p className="text-sm mt-1">{codesError.message}</p>
+                              <Button 
+                                variant="outline" 
+                                size="sm" 
+                                className="mt-2"
+                                onClick={() => window.location.reload()}
+                              >
+                                Reload Page
+                              </Button>
+                            </div>
                           </td>
                         </tr>
                       ) : codes.length === 0 ? (
