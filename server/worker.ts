@@ -144,11 +144,11 @@ async function handleAPI(request: Request, env: Env): Promise<Response> {
         });
       }
       
-      // Check if pagination is requested (if either page or limit is explicitly set)
-      const hasPagination = urlParams.has('page') || urlParams.has('limit');
-      console.log('Pagination check:', { hasPagination, hasPage: urlParams.has('page'), hasLimit: urlParams.has('limit') });
+      // Always use pagination when page or limit is provided
+      const usePagination = urlParams.has('page') || urlParams.has('limit');
+      console.log('Pagination check:', { usePagination, hasPage: urlParams.has('page'), hasLimit: urlParams.has('limit') });
       
-      if (!hasPagination) {
+      if (!usePagination) {
         console.log('No pagination - returning all codes');
         const codes = await storageInstance.getAllPromoCodes();
         return new Response(JSON.stringify(codes), {
