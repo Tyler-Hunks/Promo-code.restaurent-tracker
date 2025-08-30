@@ -22,8 +22,6 @@ export async function apiRequest(
     'x-api-key': import.meta.env.VITE_API_KEY || 'promo-manager-2024-secure-key', // API key for authentication
   };
   
-  console.log('API Request:', { url: fullUrl, hasApiKey: !!headers['x-api-key'], apiKey: headers['x-api-key'] });
-  
   if (data) {
     headers['Content-Type'] = 'application/json';
   }
@@ -51,12 +49,9 @@ export const getQueryFn: <T>(options: {
     const url = queryKey.join("/") as string;
     const fullUrl = url.startsWith('http') ? url : `${baseUrl}${url}`;
     
-    const apiKey = import.meta.env.VITE_API_KEY || 'promo-manager-2024-secure-key';
-    console.log('Query Request:', { url: fullUrl, hasApiKey: !!apiKey, apiKey });
-    
     const res = await fetch(fullUrl, {
       headers: {
-        'x-api-key': apiKey, // API key for authentication
+        'x-api-key': import.meta.env.VITE_API_KEY || 'promo-manager-2024-secure-key', // API key for authentication
       },
       credentials: "include",
     });
