@@ -20,6 +20,14 @@ export const promoCodes = pgTable("promo_codes", {
   usedAt: timestamp("used_at"),
 });
 
+export const apiTokens = pgTable("api_tokens", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  token: text("token").notNull().unique(),
+  name: text("name").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  lastUsedAt: timestamp("last_used_at"),
+});
+
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   password: true,
@@ -59,6 +67,14 @@ export const csvImportSchema = z.object({
   }))
 });
 
+export const insertApiTokenSchema = createInsertSchema(apiTokens).pick({
+  name: true,
+});
+
+export const apiTokenGenerateSchema = z.object({
+  name: z.string().min(1).max(100),
+});
+
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 export type InsertPromoCode = z.infer<typeof insertPromoCodeSchema>;
@@ -66,3 +82,6 @@ export type PromoCode = typeof promoCodes.$inferSelect;
 export type BulkGenerate = z.infer<typeof bulkGenerateSchema>;
 export type CampaignGenerate = z.infer<typeof campaignGenerateSchema>;
 export type CsvImport = z.infer<typeof csvImportSchema>;
+export type InsertApiToken = z.infer<typeof insertApiTokenSchema>;
+export type ApiToken = typeof apiTokens.$inferSelect;
+export type ApiTokenGenerate = z.infer<typeof apiTokenGenerateSchema>;

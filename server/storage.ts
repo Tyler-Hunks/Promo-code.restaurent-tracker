@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type PromoCode, type InsertPromoCode, users, promoCodes } from "@shared/schema";
+import { type User, type InsertUser, type PromoCode, type InsertPromoCode, type ApiToken, type InsertApiToken, users, promoCodes, apiTokens } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { db } from "./db";
 import { eq, sql, and, inArray } from "drizzle-orm";
@@ -25,6 +25,13 @@ export interface IStorage {
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   
+  // API Token methods
+  getAllApiTokens(): Promise<ApiToken[]>;
+  getApiTokenByToken(token: string): Promise<ApiToken | undefined>;
+  createApiToken(apiToken: InsertApiToken): Promise<ApiToken>;
+  deleteApiToken(id: string): Promise<boolean>;
+  updateTokenLastUsed(token: string): Promise<void>;
+  
   // Promo code methods
   getAllPromoCodes(): Promise<PromoCode[]>;
   getPaginatedPromoCodes(options: PaginationOptions): Promise<PaginatedResult<PromoCode>>;
@@ -44,10 +51,12 @@ export interface IStorage {
 export class MemStorage implements IStorage {
   private users: Map<string, User>;
   private promoCodes: Map<string, PromoCode>;
+  private apiTokens: Map<string, ApiToken>;
 
   constructor() {
     this.users = new Map();
     this.promoCodes = new Map();
+    this.apiTokens = new Map();
   }
 
   async getUser(id: string): Promise<User | undefined> {
@@ -65,6 +74,53 @@ export class MemStorage implements IStorage {
     const user: User = { ...insertUser, id };
     this.users.set(id, user);
     return user;
+  }
+
+  async getAllApiTokens(): Promise<ApiToken[]> {
+    return Array.from(this.apiTokens.values()).sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+  }
+
+  async getApiTokenByToken(token: string): Promise<ApiToken | undefined> {
+    return Array.from(this.apiTokens.values()).find(
+      (apiToken) => apiToken.token === token
+    );
+  }
+
+  async createApiToken(insertApiToken: InsertApiToken): Promise<ApiToken> {
+    const id = randomUUID();
+    const token = this.generatePermanentToken();
+    const apiToken: ApiToken = {
+      ...insertApiToken,
+      id,
+      token,
+      createdAt: new Date(),
+      lastUsedAt: null,
+    };
+    this.apiTokens.set(id, apiToken);
+    return apiToken;
+  }
+
+  async deleteApiToken(id: string): Promise<boolean> {
+    return this.apiTokens.delete(id);
+  }
+
+  async updateTokenLastUsed(token: string): Promise<void> {
+    const apiToken = await this.getApiTokenByToken(token);
+    if (apiToken) {
+      apiToken.lastUsedAt = new Date();
+      this.apiTokens.set(apiToken.id, apiToken);
+    }
+  }
+
+  private generatePermanentToken(): string {
+    const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    let token = 'pmt_'; // Permanent token prefix
+    for (let i = 0; i < 40; i++) {
+      token += characters.charAt(Math.floor(Math.random() * characters.length));
+    }
+    return token;
   }
 
   async getAllPromoCodes(): Promise<PromoCode[]> {
@@ -281,6 +337,45 @@ export class MemStorage implements IStorage {
 
 // DatabaseStorage implementation
 export class DatabaseStorage implements IStorage {
+  
+  async getAllApiTokens(): Promise<ApiToken[]> {
+    const tokens = await db.select().from(apiTokens).orderBy(sql`${apiTokens.createdAt} DESC`);
+    return tokens;
+  }
+
+  async getApiTokenByToken(token: string): Promise<ApiToken | undefined> {
+    const [result] = await db.select().from(apiTokens).where(eq(apiTokens.token, token));
+    return result || undefined;
+  }
+
+  async createApiToken(insertApiToken: InsertApiToken): Promise<ApiToken> {
+    const token = this.generatePermanentToken();
+    const [result] = await db.insert(apiTokens).values({
+      ...insertApiToken,
+      token,
+    }).returning();
+    return result;
+  }
+
+  async deleteApiToken(id: string): Promise<boolean> {
+    const result = await db.delete(apiTokens).where(eq(apiTokens.id, id));
+    return (result.rowCount || 0) > 0;
+  }
+
+  async updateTokenLastUsed(token: string): Promise<void> {
+    await db.update(apiTokens)
+      .set({ lastUsedAt: new Date() })
+      .where(eq(apiTokens.token, token));
+  }
+
+  private generatePermanentToken(): string {
+    const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    let token = 'pmt_'; // Permanent token prefix
+    for (let i = 0; i < 40; i++) {
+      token += characters.charAt(Math.floor(Math.random() * characters.length));
+    }
+    return token;
+  }
   async getUser(id: string): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.id, id));
     return user || undefined;

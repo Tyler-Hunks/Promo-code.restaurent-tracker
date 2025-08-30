@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type PromoCode, type InsertPromoCode } from "@shared/schema";
+import { type User, type InsertUser, type PromoCode, type InsertPromoCode, type ApiToken, type ApiTokenGenerate } from "@shared/schema";
 import { createClient } from '@supabase/supabase-js';
 import type { IStorage, PaginationOptions, PaginatedResult } from "./storage";
 
@@ -250,6 +250,82 @@ export class CloudflareStorage implements IStorage {
     }
 
     return { imported, skipped, errors };
+  }
+
+  // API Token management
+  async getAllApiTokens(): Promise<ApiToken[]> {
+    const { data } = await this.supabase
+      .from('api_tokens')
+      .select('*')
+      .order('created_at', { ascending: false });
+    
+    return (data || []).map((token: any) => ({
+      id: token.id,
+      name: token.name,
+      token: token.token,
+      createdAt: new Date(token.created_at),
+      lastUsedAt: token.last_used_at ? new Date(token.last_used_at) : null,
+    }));
+  }
+
+  async getApiTokenByToken(token: string): Promise<ApiToken | undefined> {
+    const { data } = await this.supabase
+      .from('api_tokens')
+      .select('*')
+      .eq('token', token)
+      .single();
+    
+    if (!data) return undefined;
+    
+    return {
+      id: data.id,
+      name: data.name,
+      token: data.token,
+      createdAt: new Date(data.created_at),
+      lastUsedAt: data.last_used_at ? new Date(data.last_used_at) : null,
+    };
+  }
+
+  async createApiToken(apiTokenData: ApiTokenGenerate): Promise<ApiToken> {
+    // Generate a secure token
+    const token = 'sk-' + Array.from(crypto.getRandomValues(new Uint8Array(24)))
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('');
+    
+    const { data } = await this.supabase
+      .from('api_tokens')
+      .insert({
+        name: apiTokenData.name,
+        token: token,
+        created_at: new Date().toISOString(),
+        last_used_at: null
+      })
+      .select()
+      .single();
+    
+    return {
+      id: data.id,
+      name: data.name,
+      token: data.token,
+      createdAt: new Date(data.created_at),
+      lastUsedAt: data.last_used_at ? new Date(data.last_used_at) : null,
+    };
+  }
+
+  async deleteApiToken(id: string): Promise<boolean> {
+    const { error } = await this.supabase
+      .from('api_tokens')
+      .delete()
+      .eq('id', id);
+    
+    return !error;
+  }
+
+  async updateTokenLastUsed(token: string): Promise<void> {
+    await this.supabase
+      .from('api_tokens')
+      .update({ last_used_at: new Date().toISOString() })
+      .eq('token', token);
   }
 }
 

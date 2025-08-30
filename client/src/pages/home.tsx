@@ -9,10 +9,11 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Copy, Ticket, Plus, Layers, Search, Trash2, AlertTriangle, Download, Upload } from "lucide-react";
+import { Copy, Ticket, Plus, Layers, Search, Trash2, AlertTriangle, Download, Upload, Settings } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { PromoCode, BulkGenerate, CampaignGenerate } from "@shared/schema";
+import TokenManager from "@/components/TokenManager";
 
 export default function Home() {
   const [searchTerm, setSearchTerm] = useState("");
@@ -33,6 +34,7 @@ export default function Home() {
   const [codeToDelete, setCodeToDelete] = useState<string | null>(null);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
+  const [showTokenManager, setShowTokenManager] = useState(false);
   const { toast } = useToast();
 
   // Pagination states
@@ -631,6 +633,14 @@ export default function Home() {
               </div>
             </div>
             <div className="flex items-center space-x-4">
+              <Button
+                variant="outline"
+                onClick={() => setShowTokenManager(!showTokenManager)}
+                data-testid="button-toggle-tokens"
+              >
+                <Settings className="h-4 w-4 mr-2" />
+                {showTokenManager ? 'Hide Tokens' : 'API Tokens'}
+              </Button>
               {/* Generate Code Button with Dropdown */}
               <div className="flex items-center space-x-2">
                 <Dialog open={isGenerateModalOpen} onOpenChange={setIsGenerateModalOpen}>
@@ -827,6 +837,15 @@ export default function Home() {
           </div>
         </div>
       </header>
+
+      {/* Token Manager Section */}
+      {showTokenManager && (
+        <div className="bg-white border-b">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            <TokenManager />
+          </div>
+        </div>
+      )}
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">

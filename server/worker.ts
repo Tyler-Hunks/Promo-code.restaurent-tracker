@@ -1,6 +1,6 @@
 // Cloudflare Worker entry point
 import { storage } from "./storage-cloudflare";
-import { insertPromoCodeSchema, bulkGenerateSchema } from "../shared/schema";
+import { insertPromoCodeSchema, bulkGenerateSchema, apiTokenGenerateSchema } from "../shared/schema";
 
 // Types for Cloudflare Worker environment
 interface Env {
@@ -67,7 +67,7 @@ function generateSecureToken(): string {
 const activeTokens = new Set<string>();
 
 // Bearer Token Authentication
-function requireAuth(request: Request, env: Env) {
+async function requireAuth(request: Request, env: Env) {
   const authHeader = request.headers.get('Authorization');
   
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -81,16 +81,30 @@ function requireAuth(request: Request, env: Env) {
   
   const token = authHeader.substring(7); // Remove 'Bearer ' prefix
   
-  if (!activeTokens.has(token)) {
-    return new Response(JSON.stringify({ 
-      message: 'Unauthorized: Invalid token'
-    }), {
-      status: 401,
-      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
-    });
+  // Check if it's a temporary session token
+  if (activeTokens.has(token)) {
+    return null;
   }
   
-  return null;
+  // Check if it's a permanent API token
+  try {
+    const storageInstance = storage(env);
+    const permanentToken = await storageInstance.getApiTokenByToken(token);
+    if (permanentToken) {
+      // Update last used timestamp
+      await storageInstance.updateTokenLastUsed(token);
+      return null;
+    }
+  } catch (error) {
+    console.error('Error checking permanent token:', error);
+  }
+  
+  return new Response(JSON.stringify({ 
+    message: 'Unauthorized: Invalid token'
+  }), {
+    status: 401,
+    headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+  });
 }
 
 // CORS headers with no-cache for API responses
@@ -171,7 +185,7 @@ async function handleAPI(request: Request, env: Env): Promise<Response> {
   }
   
   // Check Bearer token for all other API routes
-  const authError = requireAuth(request, env);
+  const authError = await requireAuth(request, env);
   if (authError) return authError;
 
   const storageInstance = storage(env);
@@ -365,6 +379,52 @@ async function handleAPI(request: Request, env: Env): Promise<Response> {
       }
 
       return new Response(JSON.stringify({ message: "Promo code deleted successfully", code }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    // Token management endpoints
+    if (path === '/api/tokens' && method === 'GET') {
+      const tokens = await storageInstance.getAllApiTokens();
+      return new Response(JSON.stringify(tokens), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    if (path === '/api/tokens' && method === 'POST') {
+      const body = await request.json() as any;
+      const validation = apiTokenGenerateSchema.safeParse(body);
+      if (!validation.success) {
+        return new Response(JSON.stringify({ message: 'Invalid token data' }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      const token = await storageInstance.createApiToken(validation.data);
+      return new Response(JSON.stringify(token), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    if (path.startsWith('/api/tokens/') && method === 'DELETE') {
+      const id = path.split('/').pop();
+      if (!id) {
+        return new Response(JSON.stringify({ message: 'Token ID required' }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      const deleted = await storageInstance.deleteApiToken(id);
+      if (!deleted) {
+        return new Response(JSON.stringify({ message: 'Token not found' }), {
+          status: 404,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      return new Response(JSON.stringify({ message: 'Token deleted successfully' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }

@@ -1,7 +1,7 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertPromoCodeSchema, bulkGenerateSchema, campaignGenerateSchema, csvImportSchema, type BulkGenerate, type CampaignGenerate, type CsvImport } from "@shared/schema";
+import { insertPromoCodeSchema, bulkGenerateSchema, campaignGenerateSchema, csvImportSchema, apiTokenGenerateSchema, type BulkGenerate, type CampaignGenerate, type CsvImport, type ApiTokenGenerate } from "@shared/schema";
 
 // Generate secure token
 function generateSecureToken(): string {
@@ -17,7 +17,7 @@ function generateSecureToken(): string {
 const activeTokens = new Set<string>();
 
 // Bearer Token Authentication Middleware
-function requireAuth(req: Request, res: Response, next: NextFunction) {
+async function requireAuth(req: Request, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization;
   
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -28,13 +28,26 @@ function requireAuth(req: Request, res: Response, next: NextFunction) {
   
   const token = authHeader.substring(7); // Remove 'Bearer ' prefix
   
-  if (!activeTokens.has(token)) {
-    return res.status(401).json({ 
-      message: 'Unauthorized: Invalid token'
-    });
+  // Check if it's a temporary session token
+  if (activeTokens.has(token)) {
+    return next();
   }
   
-  next();
+  // Check if it's a permanent API token
+  try {
+    const permanentToken = await storage.getApiTokenByToken(token);
+    if (permanentToken) {
+      // Update last used timestamp
+      await storage.updateTokenLastUsed(token);
+      return next();
+    }
+  } catch (error) {
+    console.error('Error checking permanent token:', error);
+  }
+  
+  return res.status(401).json({ 
+    message: 'Unauthorized: Invalid token'
+  });
 }
 
 function generateCode(format: string = "PROMO-XXXX"): string {
@@ -414,6 +427,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ 
         message: error instanceof Error ? error.message : "Failed to import promo codes" 
       });
+    }
+  });
+
+  // Permanent API Token endpoints
+  app.get('/api/tokens', async (req, res) => {
+    try {
+      const tokens = await storage.getAllApiTokens();
+      res.json(tokens);
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to fetch tokens' });
+    }
+  });
+
+  app.post('/api/tokens', async (req, res) => {
+    try {
+      const validation = apiTokenGenerateSchema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({ message: 'Invalid token data' });
+      }
+
+      const token = await storage.createApiToken(validation.data);
+      res.json(token);
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to create token' });
+    }
+  });
+
+  app.delete('/api/tokens/:id', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const deleted = await storage.deleteApiToken(id);
+      
+      if (!deleted) {
+        return res.status(404).json({ message: 'Token not found' });
+      }
+      
+      res.json({ message: 'Token deleted successfully' });
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to delete token' });
     }
   });
 
