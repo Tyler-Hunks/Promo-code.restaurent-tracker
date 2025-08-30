@@ -69,11 +69,14 @@ function requireApiKey(request: Request, env: Env) {
   return null;
 }
 
-// CORS headers
+// CORS headers with no-cache for API responses
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, PATCH, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, x-api-key',
+  'Cache-Control': 'no-cache, no-store, must-revalidate',
+  'Pragma': 'no-cache',
+  'Expires': '0'
 };
 
 // Code generation utilities
