@@ -58,9 +58,21 @@ function requireApiKey(request: Request, env: Env) {
   const apiKey = request.headers.get('x-api-key');
   const expectedApiKey = env.API_KEY || 'promo-manager-2024-secure-key';
   
+  // Debug logging (remove in production)
+  console.log('API Key Debug:', {
+    receivedKey: apiKey ? 'provided' : 'missing',
+    expectedKey: expectedApiKey,
+    envAPIKey: env.API_KEY ? 'set' : 'not set'
+  });
+  
   if (!apiKey || apiKey !== expectedApiKey) {
     return new Response(JSON.stringify({ 
-      message: 'Unauthorized: Valid API key required' 
+      message: 'Unauthorized: Valid API key required',
+      debug: {
+        keyReceived: !!apiKey,
+        expectedKey: expectedApiKey,
+        envVarSet: !!env.API_KEY
+      }
     }), {
       status: 401,
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
