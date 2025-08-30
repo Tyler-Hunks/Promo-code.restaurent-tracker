@@ -3,15 +3,34 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertPromoCodeSchema, bulkGenerateSchema, campaignGenerateSchema, csvImportSchema, type BulkGenerate, type CampaignGenerate, type CsvImport } from "@shared/schema";
 
-// API Key Authentication Middleware
-function requireApiKey(req: Request, res: Response, next: NextFunction) {
-  const apiKey = req.headers['x-api-key'];
-  const expectedApiKey = process.env.API_KEY || 'promo-manager-2024-secure-key';
+// Generate secure token
+function generateSecureToken(): string {
+  const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  let token = '';
+  for (let i = 0; i < 32; i++) {
+    token += characters.charAt(Math.floor(Math.random() * characters.length));
+  }
+  return token;
+}
+
+// Store active tokens (in production, use KV storage)
+const activeTokens = new Set<string>();
+
+// Bearer Token Authentication Middleware
+function requireAuth(req: Request, res: Response, next: NextFunction) {
+  const authHeader = req.headers.authorization;
   
-  if (!apiKey || apiKey !== expectedApiKey) {
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(401).json({ 
-      message: 'Unauthorized: Valid API key required',
-      hint: 'Include x-api-key header with your request'
+      message: 'Unauthorized: Bearer token required'
+    });
+  }
+  
+  const token = authHeader.substring(7); // Remove 'Bearer ' prefix
+  
+  if (!activeTokens.has(token)) {
+    return res.status(401).json({ 
+      message: 'Unauthorized: Invalid token'
     });
   }
   
@@ -44,8 +63,35 @@ async function generateUniqueCode(format: string = "PROMO-XXXX"): Promise<string
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Apply API key authentication to all API routes
-  app.use('/api', requireApiKey);
+  // Login endpoint (no auth required)
+  app.post('/api/auth/login', async (req, res) => {
+    try {
+      const { apiKey } = req.body;
+      
+      // Verify the API key (stored securely in environment)
+      const expectedApiKey = process.env.API_KEY || 'promo-manager-2024-secure-key';
+      if (apiKey !== expectedApiKey) {
+        return res.status(401).json({ message: 'Invalid API key' });
+      }
+      
+      // Generate secure token
+      const token = generateSecureToken();
+      activeTokens.add(token);
+      
+      res.json({ token, expiresIn: 86400 });
+    } catch (error) {
+      res.status(400).json({ message: 'Invalid request' });
+    }
+  });
+  
+  // Apply Bearer token authentication to all other API routes
+  app.use('/api', (req, res, next) => {
+    // Skip auth for login endpoint
+    if (req.path === '/auth/login') {
+      return next();
+    }
+    requireAuth(req, res, next);
+  });
 
   // Get all promo codes with pagination and search
   app.get("/api/promo-codes", async (req, res) => {

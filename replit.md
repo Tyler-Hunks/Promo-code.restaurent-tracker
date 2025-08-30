@@ -56,9 +56,17 @@ Preferred communication style: Simple, everyday language.
 - **API Authentication**: Secure API key protection on all endpoints
 - **Responsive Design**: Mobile-first design with shadcn/ui components
 
+## Security Architecture
+- **Authentication**: Bearer token system for secure API access
+- **Login Flow**: Users authenticate with API key to receive secure tokens
+- **Token Storage**: Tokens stored in browser localStorage with automatic cleanup
+- **API Protection**: All endpoints require valid Bearer tokens except login
+- **Headers**: Authorization: Bearer <token> for all authenticated requests
+- **Development**: Same authentication system for both dev server and production Worker
+
 ## External Dependencies
 
-- **Database**: Neon PostgreSQL (serverless)
+- **Database**: Neon PostgreSQL (serverless) 
 - **UI Components**: Radix UI primitives for accessible components
 - **Icons**: Lucide React for consistent iconography
 - **Development Tools**: Replit-specific plugins for development environment integration
