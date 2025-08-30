@@ -1,0 +1,30 @@
+testAPI()
+VM201:8 🔍 Testing Cloudflare Worker API...
+
+VM201:22 Testing Stats...
+Promise {<pending>}[[Prototype]]: Promisecatch: ƒ catch()constructor: ƒ Promise()finally: ƒ finally()then: ƒ then()Symbol(Symbol.toStringTag): "Promise"[[Prototype]]: Objectconstructor: ƒ Object()hasOwnProperty: ƒ hasOwnProperty()isPrototypeOf: ƒ isPrototypeOf()propertyIsEnumerable: ƒ propertyIsEnumerable()toLocaleString: ƒ toLocaleString()toString: ƒ toString()valueOf: ƒ valueOf()__defineGetter__: ƒ __defineGetter__()__defineSetter__: ƒ __defineSetter__()__lookupGetter__: ƒ __lookupGetter__()__lookupSetter__: ƒ __lookupSetter__()__proto__: (...)get __proto__: ƒ __proto__()set __proto__: ƒ __proto__()[[PromiseState]]: "fulfilled"[[PromiseResult]]: undefined
+VM201:24   GET https://promo-code-manager.bluepavilionemail.workers.dev/api/promo-codes/stats 401 (Unauthorized)
+testAPI @ VM201:24
+(anonymous) @ VM230:1
+VM201:32   Status: 401 
+VM201:33   Headers: {access-control-allow-origin: '*', alt-svc: 'h3=":443"; ma=86400', cf-ray: '977096f29a6b5560-KUL', content-length: '50', content-type: 'application/json', …}
+VM201:40   ❌ Error Response: {"message":"Unauthorized: Valid API key required"}
+VM201:46 
+VM201:22 Testing Campaigns...
+VM201:24   GET https://promo-code-manager.bluepavilionemail.workers.dev/api/campaigns 401 (Unauthorized)
+testAPI @ VM201:24
+await in testAPI
+(anonymous) @ VM230:1
+VM201:32   Status: 401 
+VM201:33   Headers: {access-control-allow-origin: '*', alt-svc: 'h3=":443"; ma=86400', cf-ray: '977096f2da745560-KUL', content-length: '50', content-type: 'application/json', …}
+VM201:40   ❌ Error Response: {"message":"Unauthorized: Valid API key required"}
+VM201:46 
+VM201:22 Testing Promo Codes (first page)...
+VM201:24   GET https://promo-code-manager.bluepavilionemail.workers.dev/api/promo-codes?page=1&limit=5 401 (Unauthorized)
+testAPI @ VM201:24
+await in testAPI
+(anonymous) @ VM230:1
+VM201:32   Status: 401 
+VM201:33   Headers: {access-control-allow-origin: '*', alt-svc: 'h3=":443"; ma=86400', cf-ray: '977096f32a7b5560-KUL', content-length: '50', content-type: 'application/json', …}
+VM201:40   ❌ Error Response: {"message":"Unauthorized: Valid API key required"}
+VM201:46 
