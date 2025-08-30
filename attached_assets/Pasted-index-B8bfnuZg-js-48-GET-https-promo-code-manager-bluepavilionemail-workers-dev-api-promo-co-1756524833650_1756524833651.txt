@@ -1,0 +1,73 @@
+index-B8bfnuZg.js:48 
+ 
+ GET https://promo-code-manager.bluepavilionemail.workers.dev/api/promo-codes?page=1&limit=100 401 (Unauthorized)
+Ut	@	index-B8bfnuZg.js:48
+queryFn	@	index-B8bfnuZg.js:188
+u	@	index-B8bfnuZg.js:48
+T	@	index-B8bfnuZg.js:48
+start	@	index-B8bfnuZg.js:48
+fetch	@	index-B8bfnuZg.js:48
+#d	@	index-B8bfnuZg.js:48
+onSubscribe	@	index-B8bfnuZg.js:48
+subscribe	@	index-B8bfnuZg.js:48
+(anonymous)	@	index-B8bfnuZg.js:48
+pf	@	index-B8bfnuZg.js:38
+ai	@	index-B8bfnuZg.js:40
+Gr	@	index-B8bfnuZg.js:40
+cp	@	index-B8bfnuZg.js:40
+Fn	@	index-B8bfnuZg.js:38
+qx	@	index-B8bfnuZg.js:40
+xr	@	index-B8bfnuZg.js:40
+up	@	index-B8bfnuZg.js:40
+z	@	index-B8bfnuZg.js:25
+Z	@	index-B8bfnuZg.js:25
+[NEW] Explain Console errors by using Copilot in Edge: click 
+ to explain an error. Learn more
+Don't show again
+index-B8bfnuZg.js:48 
+ 
+ GET https://promo-code-manager.bluepavilionemail.workers.dev/api/promo-codes/stats 401 (Unauthorized)
+(anonymous)	@	index-B8bfnuZg.js:48
+u	@	index-B8bfnuZg.js:48
+T	@	index-B8bfnuZg.js:48
+start	@	index-B8bfnuZg.js:48
+fetch	@	index-B8bfnuZg.js:48
+#d	@	index-B8bfnuZg.js:48
+onSubscribe	@	index-B8bfnuZg.js:48
+subscribe	@	index-B8bfnuZg.js:48
+(anonymous)	@	index-B8bfnuZg.js:48
+pf	@	index-B8bfnuZg.js:38
+ai	@	index-B8bfnuZg.js:40
+Gr	@	index-B8bfnuZg.js:40
+cp	@	index-B8bfnuZg.js:40
+Fn	@	index-B8bfnuZg.js:38
+qx	@	index-B8bfnuZg.js:40
+xr	@	index-B8bfnuZg.js:40
+up	@	index-B8bfnuZg.js:40
+z	@	index-B8bfnuZg.js:25
+Z	@	index-B8bfnuZg.js:25
+index-B8bfnuZg.js:48 
+ 
+ GET https://promo-code-manager.bluepavilionemail.workers.dev/api/campaigns 401 (Unauthorized)
+(anonymous)	@	index-B8bfnuZg.js:48
+u	@	index-B8bfnuZg.js:48
+T	@	index-B8bfnuZg.js:48
+start	@	index-B8bfnuZg.js:48
+fetch	@	index-B8bfnuZg.js:48
+#d	@	index-B8bfnuZg.js:48
+onSubscribe	@	index-B8bfnuZg.js:48
+subscribe	@	index-B8bfnuZg.js:48
+(anonymous)	@	index-B8bfnuZg.js:48
+pf	@	index-B8bfnuZg.js:38
+ai	@	index-B8bfnuZg.js:40
+Gr	@	index-B8bfnuZg.js:40
+cp	@	index-B8bfnuZg.js:40
+Fn	@	index-B8bfnuZg.js:38
+qx	@	index-B8bfnuZg.js:40
+xr	@	index-B8bfnuZg.js:40
+up	@	index-B8bfnuZg.js:40
+z	@	index-B8bfnuZg.js:25
+Z	@	index-B8bfnuZg.js:25
+28
+[Deprecation] -ms-high-contrast is in the process of being deprecated. Please see <URL> for tips on updating to the new Forced Colors Mode standard.
+﻿
