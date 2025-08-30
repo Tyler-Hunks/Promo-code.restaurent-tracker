@@ -6,7 +6,7 @@ compatibility_flags = ["nodejs_compat"]
 
 # Static assets (React build files)
 [assets]
-bucket = "dist/public"
+directory = "dist/public"
 
 # Environment variables (set these in Cloudflare Dashboard)
 [vars]
