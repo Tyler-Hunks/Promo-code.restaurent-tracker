@@ -76,7 +76,7 @@ export default function Login({ onLogin }: LoginProps) {
               <div className="text-xs text-muted-foreground space-y-1">
                 <p>Use this API key:</p>
                 <div className="bg-gray-100 p-2 rounded border break-all font-mono text-xs">
-                  promo-manager-2024-secure-key
+                  mwlijmhevsgorhwoysmaldxiyadetmqilduoainirhwoysmaldxiyadetmqilduoxlni
                 </div>
                 <p className="text-blue-600">Copy and paste the above key to log in</p>
               </div>
