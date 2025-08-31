@@ -21,7 +21,7 @@ const activeTokens = new Set<string>();
 function createStatelessToken(apiKey: string): string {
   const timestamp = Date.now();
   const payload = `${timestamp}.${apiKey}`;
-  const secret = process.env.API_KEY || 'fallback-secret';
+  const secret = process.env.API_KEY || 'temp-fallback';
   const signature = crypto.createHmac('sha256', secret)
     .update(payload)
     .digest('hex');
@@ -44,7 +44,7 @@ function verifyStatelessToken(token: string, expectedApiKey: string): boolean {
     if (now - timestamp > 24 * 60 * 60 * 1000) return false;
     
     const payload = `${timestamp}.${expectedApiKey}`;
-    const secret = process.env.API_KEY || 'fallback-secret';
+    const secret = process.env.API_KEY || 'temp-fallback';
     const expectedSignature = crypto.createHmac('sha256', secret)
       .update(payload)
       .digest('hex');
@@ -129,7 +129,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { apiKey } = req.body;
       
       // Verify the API key (stored securely in environment)
-      const expectedApiKey = process.env.API_KEY || 'promo-manager-2024-secure-key';
+      const expectedApiKey = process.env.API_KEY;
+      if (!expectedApiKey) {
+        return res.status(500).json({ message: 'Server configuration error' });
+      }
       if (apiKey !== expectedApiKey) {
         return res.status(401).json({ message: 'Invalid API key' });
       }
