@@ -73,15 +73,12 @@ export default function Login({ onLogin }: LoginProps) {
                 disabled={isLoading}
                 data-testid="input-api-key"
               />
-              <div className="text-sm text-muted-foreground space-y-2">
-                <p className="font-semibold text-orange-600">⚠️ Use this exact API key:</p>
-                <div className="bg-yellow-50 border-2 border-yellow-300 p-3 rounded border break-all font-mono text-sm select-all">
+              <div className="text-xs text-muted-foreground space-y-1">
+                <p>Use this API key:</p>
+                <div className="bg-gray-100 p-2 rounded border break-all font-mono text-xs">
                   mwlijmhevsgorhwoysmaldxiyadetmqilduoainirhwoysmaldxiyadetmqilduoxlni
                 </div>
-                <div className="text-blue-600 font-medium">
-                  ✅ Copy the above key (68 characters long)
-                  <br/>❌ Do NOT use "ProcogenBluePavTracker" 
-                </div>
+                <p className="text-blue-600">Copy and paste the above key to log in</p>
               </div>
             </div>
             <Button 
