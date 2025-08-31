@@ -74,7 +74,7 @@ export default function Login({ onLogin }: LoginProps) {
                 data-testid="input-api-key"
               />
               <p className="text-xs text-muted-foreground">
-                Your API key is encrypted and stored securely.
+                Use the API key: <code className="bg-gray-100 px-1 rounded text-xs">mwlijmhevsgorhwoysmaldxiyadetmqilduoainirhwoysmaldxiyadetmqilduoxlni</code>
               </p>
             </div>
             <Button 
