@@ -6,7 +6,7 @@ This is a promo code management system built with React, Express, TypeScript, an
 
 ## Quick Setup Instructions
 
-1. **Login API Key**: Use this API key to log in: `mwlijmhevsgorhwoysmaldxiyadetmqilduoxlni`
+1. **Login API Key**: Use this API key to log in: `promo-manager-2024-secure-key`
 2. **Development**: Run `npm run dev` to start the development server on port 5000
 3. **Production**: Deploy to Cloudflare Workers with Supabase database connection
 4. **Features**: Campaign-based analytics, bulk operations, CSV import/export, Bearer token authentication
