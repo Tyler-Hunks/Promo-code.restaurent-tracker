@@ -23,13 +23,23 @@ function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   
   useEffect(() => {
-    // Check if user has valid token
+    // Clear any old invalid tokens and check for valid token
     const token = getStoredToken();
-    setIsAuthenticated(!!token);
+    if (token && !token.startsWith('temp.')) {
+      // Old format token, clear it
+      removeStoredToken();
+      setIsAuthenticated(false);
+    } else {
+      setIsAuthenticated(!!token);
+    }
   }, []);
   
   const handleLogin = () => {
-    setIsAuthenticated(true);
+    // Check token again after login
+    const token = getStoredToken();
+    if (token && token.startsWith('temp.')) {
+      setIsAuthenticated(true);
+    }
   };
   
   const handleLogout = () => {

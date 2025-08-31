@@ -73,9 +73,13 @@ export default function Login({ onLogin }: LoginProps) {
                 disabled={isLoading}
                 data-testid="input-api-key"
               />
-              <p className="text-xs text-muted-foreground">
-                Use the API key: <code className="bg-gray-100 px-1 rounded text-xs">mwlijmhevsgorhwoysmaldxiyadetmqilduoainirhwoysmaldxiyadetmqilduoxlni</code>
-              </p>
+              <div className="text-xs text-muted-foreground space-y-1">
+                <p>Use this API key:</p>
+                <div className="bg-gray-100 p-2 rounded border break-all font-mono text-xs">
+                  mwlijmhevsgorhwoysmaldxiyadetmqilduoainirhwoysmaldxiyadetmqilduoxlni
+                </div>
+                <p className="text-blue-600">Copy and paste the above key to log in</p>
+              </div>
             </div>
             <Button 
               type="submit" 

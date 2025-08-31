@@ -4,6 +4,13 @@ This is a promo code management system built with React, Express, TypeScript, an
 
 **Current Status**: Production-ready system deployed on Cloudflare Workers with Supabase PostgreSQL database, optimized for large datasets (10,000+ codes) with pagination, comprehensive download capabilities, and performance optimization features.
 
+## Quick Setup Instructions
+
+1. **Login API Key**: Use this API key to log in: `mwlijmhevsgorhwoysmaldxiyadetmqilduoxlni`
+2. **Development**: Run `npm run dev` to start the development server on port 5000
+3. **Production**: Deploy to Cloudflare Workers with Supabase database connection
+4. **Features**: Campaign-based analytics, bulk operations, CSV import/export, Bearer token authentication
+
 # User Preferences
 
 Preferred communication style: Simple, everyday language.
