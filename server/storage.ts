@@ -45,6 +45,7 @@ export interface IStorage {
   togglePromoCodeStatus(code: string, newStatus: "unused" | "used"): Promise<PromoCode | undefined>;
   getPromoCodeStats(): Promise<{ total: number; used: number; available: number; expired: number }>;
   getCampaigns(): Promise<string[]>;
+  getCampaignStats(): Promise<Array<{ campaignName: string; available: number; used: number; total: number }>>;
   importPromoCodes(promoCodes: InsertPromoCode[]): Promise<{ imported: number; skipped: number; errors: string[] }>;
 }
 
@@ -310,6 +311,34 @@ export class MemStorage implements IStorage {
     return Array.from(uniqueNames) as string[];
   }
 
+  async getCampaignStats(): Promise<Array<{ campaignName: string; available: number; used: number; total: number }>> {
+    const campaignMap = new Map<string, { available: number; used: number; total: number }>();
+    
+    Array.from(this.promoCodes.values()).forEach(code => {
+      if (!code.campaignName) return;
+      
+      const current = campaignMap.get(code.campaignName) || { available: 0, used: 0, total: 0 };
+      current.total++;
+      
+      if (code.status === 'used') {
+        current.used++;
+      } else if (code.status === 'unused') {
+        // Check if expired
+        const isExpired = code.expiresAt && new Date(code.expiresAt) < new Date();
+        if (!isExpired) {
+          current.available++;
+        }
+      }
+      
+      campaignMap.set(code.campaignName, current);
+    });
+    
+    return Array.from(campaignMap.entries()).map(([campaignName, stats]) => ({
+      campaignName,
+      ...stats
+    })).sort((a, b) => b.total - a.total);
+  }
+
   async importPromoCodes(promoCodes: InsertPromoCode[]): Promise<{ imported: number; skipped: number; errors: string[] }> {
     let imported = 0;
     let skipped = 0;
@@ -547,6 +576,39 @@ export class DatabaseStorage implements IStorage {
       .where(sql`${promoCodes.campaignName} IS NOT NULL`);
     
     return campaigns.map(c => c.name).filter(Boolean) as string[];
+  }
+
+  async getCampaignStats(): Promise<Array<{ campaignName: string; available: number; used: number; total: number }>> {
+    // Update expired codes first
+    await db
+      .update(promoCodes)
+      .set({ status: "expired" })
+      .where(
+        and(
+          sql`${promoCodes.expiresAt} < NOW()`,
+          eq(promoCodes.status, "unused")
+        )
+      );
+
+    // Get campaign stats
+    const campaignStats = await db
+      .select({
+        campaignName: promoCodes.campaignName,
+        total: sql<number>`COUNT(*)::int`,
+        available: sql<number>`COUNT(CASE WHEN ${promoCodes.status} = 'unused' THEN 1 END)::int`,
+        used: sql<number>`COUNT(CASE WHEN ${promoCodes.status} = 'used' THEN 1 END)::int`,
+      })
+      .from(promoCodes)
+      .where(sql`${promoCodes.campaignName} IS NOT NULL`)
+      .groupBy(promoCodes.campaignName)
+      .orderBy(sql`COUNT(*) DESC`);
+
+    return campaignStats.map(stat => ({
+      campaignName: stat.campaignName || 'Unknown',
+      available: stat.available,
+      used: stat.used,
+      total: stat.total
+    }));
   }
 
   async importPromoCodes(promoCodeArray: InsertPromoCode[]): Promise<{ imported: number; skipped: number; errors: string[] }> {

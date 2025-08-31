@@ -1,6 +1,7 @@
 // Cloudflare Worker entry point
 import { storage } from "./storage-cloudflare";
 import { insertPromoCodeSchema, bulkGenerateSchema, apiTokenGenerateSchema } from "../shared/schema";
+import crypto from "crypto";
 
 // Types for Cloudflare Worker environment
 interface Env {
@@ -66,6 +67,44 @@ function generateSecureToken(): string {
 // Store active tokens (in production, use KV storage)
 const activeTokens = new Set<string>();
 
+// Create a stateless token with timestamp and signature (for temporary tokens)
+function createStatelessToken(apiKey: string): string {
+  const timestamp = Date.now();
+  const payload = `${timestamp}.${apiKey}`;
+  const secret = apiKey; // Use the API key itself as secret for workers
+  const signature = crypto.createHmac('sha256', secret)
+    .update(payload)
+    .digest('hex');
+  return `temp.${timestamp}.${signature}`;
+}
+
+// Verify stateless token
+function verifyStatelessToken(token: string, expectedApiKey: string): boolean {
+  try {
+    if (!token.startsWith('temp.')) return false;
+    
+    const parts = token.substring(5).split('.'); // Remove 'temp.' prefix
+    if (parts.length !== 2) return false;
+    
+    const [timestampStr, signature] = parts;
+    const timestamp = parseInt(timestampStr);
+    const now = Date.now();
+    
+    // Token expires after 24 hours
+    if (now - timestamp > 24 * 60 * 60 * 1000) return false;
+    
+    const payload = `${timestamp}.${expectedApiKey}`;
+    const secret = expectedApiKey; // Use the API key itself as secret for workers
+    const expectedSignature = crypto.createHmac('sha256', secret)
+      .update(payload)
+      .digest('hex');
+    
+    return signature === expectedSignature;
+  } catch {
+    return false;
+  }
+}
+
 // Bearer Token Authentication
 async function requireAuth(request: Request, env: Env) {
   const authHeader = request.headers.get('Authorization');
@@ -81,9 +120,17 @@ async function requireAuth(request: Request, env: Env) {
   
   const token = authHeader.substring(7); // Remove 'Bearer ' prefix
   
-  // Check if it's a temporary session token
+  // Check if it's a temporary session token (both in-memory and stateless)
   if (activeTokens.has(token)) {
     return null;
+  }
+  
+  // Check if it's a stateless temporary token
+  if (token.startsWith('temp.')) {
+    const apiKey = env.API_KEY;
+    if (apiKey && verifyStatelessToken(token, apiKey)) {
+      return null;
+    }
   }
   
   // Check if it's a permanent API token
@@ -168,8 +215,9 @@ async function handleAPI(request: Request, env: Env): Promise<Response> {
         });
       }
       
-      // Generate secure token
-      const token = generateSecureToken();
+      // Generate stateless token
+      const token = createStatelessToken(body.apiKey);
+      // Still add to activeTokens for backward compatibility during this session
       activeTokens.add(token);
       
       return new Response(JSON.stringify({ token, expiresIn: 86400 }), {
@@ -227,7 +275,7 @@ async function handleAPI(request: Request, env: Env): Promise<Response> {
       console.log('Using pagination with params:', { page, limit });
       const result = await storageInstance.getPaginatedPromoCodes({
         page,
-        limit: Math.min(limit, 1000),
+        limit: Math.min(limit, 10000),
         search,
         campaign,
         status,
@@ -250,6 +298,13 @@ async function handleAPI(request: Request, env: Env): Promise<Response> {
     if (path === '/api/campaigns' && method === 'GET') {
       const campaigns = await storageInstance.getCampaigns();
       return new Response(JSON.stringify(campaigns), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    if (path === '/api/campaigns/stats' && method === 'GET') {
+      const campaignStats = await storageInstance.getCampaignStats();
+      return new Response(JSON.stringify(campaignStats), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }

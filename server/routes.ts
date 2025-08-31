@@ -2,6 +2,7 @@ import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertPromoCodeSchema, bulkGenerateSchema, campaignGenerateSchema, csvImportSchema, apiTokenGenerateSchema, type BulkGenerate, type CampaignGenerate, type CsvImport, type ApiTokenGenerate } from "@shared/schema";
+import crypto from "crypto";
 
 // Generate secure token
 function generateSecureToken(): string {
@@ -16,6 +17,44 @@ function generateSecureToken(): string {
 // Store active tokens (in production, use KV storage)
 const activeTokens = new Set<string>();
 
+// Create a stateless token with timestamp and signature (for temporary tokens)
+function createStatelessToken(apiKey: string): string {
+  const timestamp = Date.now();
+  const payload = `${timestamp}.${apiKey}`;
+  const secret = process.env.API_KEY || 'fallback-secret';
+  const signature = crypto.createHmac('sha256', secret)
+    .update(payload)
+    .digest('hex');
+  return `temp.${timestamp}.${signature}`;
+}
+
+// Verify stateless token
+function verifyStatelessToken(token: string, expectedApiKey: string): boolean {
+  try {
+    if (!token.startsWith('temp.')) return false;
+    
+    const parts = token.substring(5).split('.'); // Remove 'temp.' prefix
+    if (parts.length !== 2) return false;
+    
+    const [timestampStr, signature] = parts;
+    const timestamp = parseInt(timestampStr);
+    const now = Date.now();
+    
+    // Token expires after 24 hours
+    if (now - timestamp > 24 * 60 * 60 * 1000) return false;
+    
+    const payload = `${timestamp}.${expectedApiKey}`;
+    const secret = process.env.API_KEY || 'fallback-secret';
+    const expectedSignature = crypto.createHmac('sha256', secret)
+      .update(payload)
+      .digest('hex');
+    
+    return signature === expectedSignature;
+  } catch {
+    return false;
+  }
+}
+
 // Bearer Token Authentication Middleware
 async function requireAuth(req: Request, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization;
@@ -28,9 +67,17 @@ async function requireAuth(req: Request, res: Response, next: NextFunction) {
   
   const token = authHeader.substring(7); // Remove 'Bearer ' prefix
   
-  // Check if it's a temporary session token
+  // Check if it's a temporary session token (both in-memory and stateless)
   if (activeTokens.has(token)) {
     return next();
+  }
+  
+  // Check if it's a stateless temporary token
+  if (token.startsWith('temp.')) {
+    const apiKey = process.env.API_KEY;
+    if (apiKey && verifyStatelessToken(token, apiKey)) {
+      return next();
+    }
   }
   
   // Check if it's a permanent API token
@@ -87,8 +134,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ message: 'Invalid API key' });
       }
       
-      // Generate secure token
-      const token = generateSecureToken();
+      // Generate stateless token instead of storing in memory
+      const token = createStatelessToken(apiKey);
+      // Still add to activeTokens for backward compatibility during this session
       activeTokens.add(token);
       
       res.json({ token, expiresIn: 86400 });
@@ -133,7 +181,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const result = await storage.getPaginatedPromoCodes({
         page,
-        limit: Math.min(limit, 1000), // Cap at 1000 per page
+        limit: Math.min(limit, 10000), // Cap at 1000 per page
         search,
         campaign,
         status,
@@ -427,6 +475,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ 
         message: error instanceof Error ? error.message : "Failed to import promo codes" 
       });
+    }
+  });
+
+  // Campaign stats endpoint
+  app.get('/api/campaigns/stats', async (req, res) => {
+    try {
+      const campaignStats = await storage.getCampaignStats();
+      res.json(campaignStats);
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to fetch campaign stats' });
     }
   });
 

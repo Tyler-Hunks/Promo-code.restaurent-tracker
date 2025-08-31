@@ -228,6 +228,27 @@ export class CloudflareStorage implements IStorage {
     return Array.from(uniqueNames).filter(Boolean) as string[];
   }
 
+  async getCampaignStats(): Promise<Array<{ campaignName: string; available: number; used: number; total: number }>> {
+    // Update expired codes first
+    await this.supabase
+      .from('promo_codes')
+      .update({ status: 'expired' })
+      .lt('expires_at', new Date().toISOString())
+      .eq('status', 'unused');
+
+    // Get campaign stats using raw SQL through Supabase
+    const { data } = await this.supabase.rpc('get_campaign_stats');
+    
+    if (!data) return [];
+    
+    return data.map((stat: any) => ({
+      campaignName: stat.campaign_name || 'Unknown',
+      available: stat.available || 0,
+      used: stat.used || 0,
+      total: stat.total || 0
+    }));
+  }
+
   async importPromoCodes(promoCodeArray: InsertPromoCode[]): Promise<{ imported: number; skipped: number; errors: string[] }> {
     let imported = 0;
     let skipped = 0;

@@ -82,6 +82,10 @@ export default function Home() {
     queryKey: ["/api/campaigns"],
   });
 
+  const { data: campaignStats = [] } = useQuery<Array<{ campaignName: string; available: number; used: number; total: number }>>({
+    queryKey: ["/api/campaigns/stats"],
+  });
+
   // Generate campaign codes mutation
   const generateCampaignMutation = useMutation({
     mutationFn: async () => {
@@ -884,17 +888,42 @@ export default function Home() {
 
                 {/* Quick Stats */}
                 <div className="border-t border-gray-200 pt-6">
-                  <h3 className="text-md font-medium text-gray-900 mb-4">Quick Stats</h3>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="text-center p-3 bg-green-50 rounded-lg">
-                      <div className="text-2xl font-bold text-green-600">{stats.available}</div>
-                      <div className="text-sm text-green-700">Available</div>
+                  <h3 className="text-md font-medium text-gray-900 mb-4">Campaign Stats</h3>
+                  {campaignStats.length === 0 ? (
+                    <div className="text-center py-4 text-gray-500">
+                      <p className="text-sm">No campaigns yet</p>
+                      <p className="text-xs">Create codes with campaign names to see stats</p>
                     </div>
-                    <div className="text-center p-3 bg-red-50 rounded-lg">
-                      <div className="text-2xl font-bold text-red-600">{stats.used}</div>
-                      <div className="text-sm text-red-700">Used</div>
+                  ) : (
+                    <div className="space-y-3 max-h-64 overflow-y-auto">
+                      {campaignStats.slice(0, 8).map((campaign) => (
+                        <div key={campaign.campaignName} className="bg-gray-50 rounded-lg p-3">
+                          <div className="text-sm font-medium text-gray-900 mb-2 truncate">
+                            {campaign.campaignName}
+                          </div>
+                          <div className="grid grid-cols-3 gap-2 text-xs">
+                            <div className="text-center">
+                              <div className="text-lg font-bold text-blue-600">{campaign.total}</div>
+                              <div className="text-blue-700">Total</div>
+                            </div>
+                            <div className="text-center">
+                              <div className="text-lg font-bold text-green-600">{campaign.available}</div>
+                              <div className="text-green-700">Available</div>
+                            </div>
+                            <div className="text-center">
+                              <div className="text-lg font-bold text-red-600">{campaign.used}</div>
+                              <div className="text-red-700">Used</div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                      {campaignStats.length > 8 && (
+                        <div className="text-center text-xs text-gray-500 pt-2">
+                          Showing top 8 campaigns
+                        </div>
+                      )}
                     </div>
-                  </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -1267,7 +1296,7 @@ export default function Home() {
                                     effectiveStatus === "unused"
                                       ? "bg-green-100 text-green-800 hover:bg-green-100"
                                       : effectiveStatus === "used"
-                                      ? "bg-blue-100 text-blue-800 hover:bg-blue-100"
+                                      ? "bg-red-100 text-red-800 hover:bg-red-100"
                                       : "bg-orange-100 text-orange-800 hover:bg-orange-100"
                                   }
                                 >
