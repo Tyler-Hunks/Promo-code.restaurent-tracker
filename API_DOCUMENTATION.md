@@ -1,7 +1,7 @@
 # Promo Code API Documentation
 
 ## Overview
-Your promo code management system uses **Bearer token authentication** for security. The system supports both temporary session tokens and permanent API tokens for different use cases.
+Your promo code management system uses **Bearer token authentication** for security and supports **unlimited scale** with optimized performance for 10,000+ codes. The system supports both temporary session tokens and permanent API tokens for different use cases, with comprehensive **campaign-based analytics** and **CSV import/export** capabilities.
 
 ## Authentication
 
@@ -118,6 +118,61 @@ Authorization: Bearer <your-token-here>
 
 ---
 
+## 🎯 Campaign Management Endpoints
+
+### Get All Campaigns
+**GET** `/api/campaigns`
+
+**Headers:**
+```json
+{
+  "Authorization": "Bearer <your-token>"
+}
+```
+
+**Response:**
+```json
+[
+  "Summer Sale",
+  "Holiday Special",
+  "Performance Test"
+]
+```
+
+### Get Campaign Statistics
+**GET** `/api/campaigns/stats`
+
+**Headers:**
+```json
+{
+  "Authorization": "Bearer <your-token>"
+}
+```
+
+**Response:**
+```json
+[
+  {
+    "campaignName": "Summer Sale",
+    "available": 1500,
+    "used": 250
+  },
+  {
+    "campaignName": "Holiday Special", 
+    "available": 800,
+    "used": 100
+  }
+]
+```
+
+**Features:**
+- Real-time campaign analytics
+- Available vs used code tracking per campaign
+- Automatic filtering of expired codes
+- Optimized for large datasets (10,000+ codes per campaign)
+
+---
+
 ## 📝 Promo Code Endpoints
 
 ### 1. Generate Single Promo Code
@@ -215,7 +270,9 @@ Authorization: Bearer <your-token-here>
 - `search` - Search codes or campaigns (optional)
 - `campaign` - Filter by campaign name (optional)
 - `status` - Filter by status: unused, used, expired (optional)
-- `export=all` - Download all codes (ignores pagination)
+- `export=all` - Download all codes as CSV (ignores pagination)
+
+**Performance Note:** Optimized for large datasets with no practical limit on total codes stored.
 
 ### 5. Get Promo Code Statistics
 **GET** `/api/promo-codes/stats`
@@ -230,12 +287,14 @@ Authorization: Bearer <your-token-here>
 **Response:**
 ```json
 {
-  "total": 1000,
+  "total": 10011,
   "used": 250,
-  "available": 700,
-  "expired": 50
+  "available": 9700,
+  "expired": 61
 }
 ```
+
+**Note:** Statistics are calculated in real-time across all codes with automatic expired code detection.
 
 ### 6. Redeem Promo Code
 **POST** `/api/promo-codes/redeem`
@@ -355,9 +414,18 @@ curl -X POST https://your-domain.com/api/promo-codes/generate \
   -H "Authorization: Bearer sk-your-permanent-token-here" \
   -d '{
     "format": "TEST-XXXX",
-    "campaignName": "Test Campaign",
+    "campaignName": "Test Campaign", 
     "discountValue": "10% off"
   }'
+
+# Get campaign statistics
+curl -X GET https://your-domain.com/api/campaigns/stats \
+  -H "Authorization: Bearer sk-your-permanent-token-here"
+
+# Export all codes as CSV
+curl -X GET "https://your-domain.com/api/promo-codes?export=all" \
+  -H "Authorization: Bearer sk-your-permanent-token-here" \
+  -o promo-codes-export.csv
 ```
 
 ### Using cURL with Temporary Token:
@@ -439,10 +507,21 @@ console.log(data);
 - Ensure you're using `Authorization: Bearer <token>` header format
 - Verify the token hasn't been deleted
 - For temporary tokens, check if it has expired (24h limit)
+- **NEW**: Tokens now use stateless cryptographic signing and persist across server restarts
 
 **"Token not found"**
 - The permanent token may have been deleted from the UI
 - Generate a new permanent token if needed
+
+**Performance with Large Datasets**
+- **SOLVED**: Removed previous 1000-code pagination limits
+- System now optimized for 10,000+ codes with real-time statistics
+- Use `export=all` parameter for complete CSV downloads without pagination
+
+**Campaign Statistics Loading Slowly**
+- **OPTIMIZED**: Campaign stats now use SQL functions for faster calculation
+- Real-time campaign analytics work efficiently with large datasets
+- Statistics are cached and updated automatically
 
 ---
 
@@ -463,33 +542,43 @@ SUPABASE_ANON_KEY=your-supabase-anon-key
 
 ---
 
-## 🆕 New Features Added:
+## 🆕 Latest Features & Improvements:
 
-### ✓ Permanent API Token System
-- **Never-expiring tokens** for automation tools
-- **Token management UI** with generate, view, delete functions
-- **Usage tracking** with creation and last-used timestamps
-- **Secure token generation** with `sk-` prefix standard
+### ✓ **Campaign-Based Analytics** (NEW!)
+- **Real-time campaign statistics** showing available vs used codes per campaign
+- **Campaign overview** with comprehensive performance metrics
+- **Automatic campaign grouping** for better organization
+- **Quick Stats dashboard** with campaign breakdown
 
-### ✓ Enhanced Authentication
-- **Dual authentication system** (temporary + permanent tokens)
-- **Bearer token standard** following industry best practices
-- **Improved security** by removing exposed API keys from frontend
+### ✓ **Unlimited Scale Performance** (ENHANCED!)
+- **Removed 1000-code pagination limit** - now supports 10,000+ codes seamlessly
+- **Optimized database queries** for large dataset performance
+- **Real-time statistics** calculated efficiently across all codes
+- **Production-grade scalability** tested with 10,000+ codes
 
-### ✓ PostgreSQL Database
-- **Permanent storage** - data survives server restarts
-- **Automatic expiration handling** - expired codes marked automatically
-- **Production ready** - proper database indexes and relationships
+### ✓ **Advanced Authentication System**
+- **Stateless Bearer tokens** that persist across server restarts
+- **Cryptographic token signing** using secure HMAC-SHA256
+- **Dual token system**: Temporary (24h) + Permanent (never expire)
+- **Environment variable security** - no hardcoded keys in source code
 
-### ✓ CSV Download & Import
-- **Download**: Export all codes with filtering
-- **Import**: Upload and restore codes from CSV
-- **Data Migration**: Perfect for platform migrations and backups
+### ✓ **Supabase Database Integration**
+- **Production PostgreSQL** with Supabase cloud infrastructure
+- **Automatic connection pooling** for high-performance operations
+- **Persistent data storage** with automatic backups
+- **SQL-based campaign statistics** with optimized functions
 
-### ✓ Bulk Operations
-- **Bulk selection** with checkboxes
-- **Bulk delete** with confirmation dialogs
-- **Bulk import** from CSV files
+### ✓ **Enhanced CSV Operations**
+- **Full export capability** - download all codes regardless of pagination
+- **Smart import system** with duplicate detection and skip handling
+- **Campaign-aware import/export** preserving all metadata
+- **Data migration tools** for platform transitions
+
+### ✓ **Production Deployment Ready**
+- **Cloudflare Workers deployment** with global edge distribution
+- **Environment variable management** through secure secrets
+- **Zero-downtime authentication** with stateless token design
+- **CORS-enabled API** for cross-origin web applications
 
 ---
 
