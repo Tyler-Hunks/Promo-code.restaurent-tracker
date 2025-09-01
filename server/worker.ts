@@ -1,7 +1,6 @@
 // Cloudflare Worker entry point
 import { storage } from "./storage-cloudflare";
 import { insertPromoCodeSchema, bulkGenerateSchema, apiTokenGenerateSchema } from "../shared/schema";
-import crypto from "crypto";
 
 // Types for Cloudflare Worker environment
 interface Env {
@@ -68,18 +67,39 @@ function generateSecureToken(): string {
 const activeTokens = new Set<string>();
 
 // Create a stateless token with timestamp and signature (for temporary tokens)
-function createStatelessToken(apiKey: string): string {
+async function createStatelessToken(apiKey: string): Promise<string> {
   const timestamp = Date.now();
   const payload = `${timestamp}.${apiKey}`;
   const secret = apiKey; // Use the API key itself as secret for workers
-  const signature = crypto.createHmac('sha256', secret)
-    .update(payload)
-    .digest('hex');
-  return `temp.${timestamp}.${signature}`;
+  
+  // Use Web Crypto API for HMAC
+  const encoder = new TextEncoder();
+  const keyData = encoder.encode(secret);
+  const messageData = encoder.encode(payload);
+  
+  const cryptoKey = await crypto.subtle.importKey(
+    'raw',
+    keyData,
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+  
+  const signature = await crypto.subtle.sign(
+    'HMAC',
+    cryptoKey,
+    messageData
+  );
+  
+  const signatureHex = Array.from(new Uint8Array(signature))
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
+    
+  return `temp.${timestamp}.${signatureHex}`;
 }
 
 // Verify stateless token
-function verifyStatelessToken(token: string, expectedApiKey: string): boolean {
+async function verifyStatelessToken(token: string, expectedApiKey: string): Promise<boolean> {
   try {
     if (!token.startsWith('temp.')) return false;
     
@@ -95,9 +115,29 @@ function verifyStatelessToken(token: string, expectedApiKey: string): boolean {
     
     const payload = `${timestamp}.${expectedApiKey}`;
     const secret = expectedApiKey; // Use the API key itself as secret for workers
-    const expectedSignature = crypto.createHmac('sha256', secret)
-      .update(payload)
-      .digest('hex');
+    
+    // Use Web Crypto API for HMAC verification
+    const encoder = new TextEncoder();
+    const keyData = encoder.encode(secret);
+    const messageData = encoder.encode(payload);
+    
+    const cryptoKey = await crypto.subtle.importKey(
+      'raw',
+      keyData,
+      { name: 'HMAC', hash: 'SHA-256' },
+      false,
+      ['sign']
+    );
+    
+    const expectedSignatureBuffer = await crypto.subtle.sign(
+      'HMAC',
+      cryptoKey,
+      messageData
+    );
+    
+    const expectedSignature = Array.from(new Uint8Array(expectedSignatureBuffer))
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('');
     
     return signature === expectedSignature;
   } catch {
@@ -128,7 +168,7 @@ async function requireAuth(request: Request, env: Env) {
   // Check if it's a stateless temporary token
   if (token.startsWith('temp.')) {
     const apiKey = env.API_KEY;
-    if (apiKey && verifyStatelessToken(token, apiKey)) {
+    if (apiKey && await verifyStatelessToken(token, apiKey)) {
       return null;
     }
   }
@@ -216,7 +256,7 @@ async function handleAPI(request: Request, env: Env): Promise<Response> {
       }
       
       // Generate stateless token
-      const token = createStatelessToken(body.apiKey);
+      const token = await createStatelessToken(body.apiKey);
       // Still add to activeTokens for backward compatibility during this session
       activeTokens.add(token);
       
