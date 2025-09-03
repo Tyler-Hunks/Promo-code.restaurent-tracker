@@ -184,7 +184,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const result = await storage.getPaginatedPromoCodes({
         page,
-        limit: Math.min(limit, 10000), // Cap at 1000 per page
+        limit: Math.min(limit, 100000), // Support up to 100K codes
         search,
         campaign,
         status,

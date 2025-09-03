@@ -315,7 +315,7 @@ async function handleAPI(request: Request, env: Env): Promise<Response> {
       console.log('Using pagination with params:', { page, limit });
       const result = await storageInstance.getPaginatedPromoCodes({
         page,
-        limit: Math.min(limit, 10000),
+        limit: Math.min(limit, 100000),
         search,
         campaign,
         status,
