@@ -199,22 +199,40 @@ export class CloudflareStorage implements IStorage {
       .lt('expires_at', new Date().toISOString())
       .eq('status', 'unused');
 
-    // Get all codes and count by status - remove Supabase's default row limits
-    const { data: allCodes } = await this.supabase
-      .from('promo_codes')
-      .select('status')
-      .limit(100000); // Support up to 100K codes
-
-    if (!allCodes) {
-      return { total: 0, used: 0, available: 0, expired: 0 };
+    // Use SQL aggregation for accurate stats - no row limits needed
+    const { data: stats } = await this.supabase
+      .rpc('get_promo_stats');
+    
+    if (stats && stats.length > 0) {
+      return stats[0];
     }
 
-    const total = allCodes.length;
-    const used = allCodes.filter((code: any) => code.status === 'used').length;
-    const expired = allCodes.filter((code: any) => code.status === 'expired').length;
-    const available = allCodes.filter((code: any) => code.status === 'unused').length;
+    // Fallback: Use manual SQL-like aggregation via Supabase
+    const { count: total } = await this.supabase
+      .from('promo_codes')
+      .select('*', { count: 'exact', head: true });
+    
+    const { count: used } = await this.supabase
+      .from('promo_codes')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'used');
+      
+    const { count: expired } = await this.supabase
+      .from('promo_codes')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'expired');
+      
+    const { count: available } = await this.supabase
+      .from('promo_codes')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'unused');
 
-    return { total, used, available, expired };
+    return { 
+      total: total || 0, 
+      used: used || 0, 
+      available: available || 0, 
+      expired: expired || 0 
+    };
   }
 
   async getCampaigns(): Promise<string[]> {
@@ -237,42 +255,57 @@ export class CloudflareStorage implements IStorage {
       .lt('expires_at', new Date().toISOString())
       .eq('status', 'unused');
 
-    // Get all codes and manually calculate campaign stats (since RPC might not exist)
-    const { data: allCodes } = await this.supabase
+    // Use SQL aggregation for campaign stats
+    const { data: campaignStats } = await this.supabase
+      .rpc('get_campaign_stats');
+    
+    if (campaignStats && campaignStats.length > 0) {
+      return campaignStats.map((stat: any) => ({
+        campaignName: stat.campaign_name,
+        total: stat.total,
+        used: stat.used,
+        available: stat.available
+      }));
+    }
+
+    // Fallback: Get campaigns and calculate stats manually
+    const { data: campaigns } = await this.supabase
       .from('promo_codes')
-      .select('campaign_name, status')
-      .not('campaign_name', 'is', null)
-      .limit(100000); // Support up to 100K codes
+      .select('campaign_name')
+      .not('campaign_name', 'is', null);
     
-    if (!allCodes) return [];
+    if (!campaigns) return [];
     
-    // Group by campaign and calculate stats
-    const campaignMap = new Map<string, { total: number; used: number; available: number }>();
+    const uniqueNames = Array.from(new Set(campaigns.map((c: any) => c.campaign_name)));
+    const stats = [];
     
-    allCodes.forEach((code: any) => {
-      const campaign = code.campaign_name;
-      if (!campaign) return;
-      
-      if (!campaignMap.has(campaign)) {
-        campaignMap.set(campaign, { total: 0, used: 0, available: 0 });
-      }
-      
-      const stats = campaignMap.get(campaign)!;
-      stats.total++;
-      
-      if (code.status === 'used') {
-        stats.used++;
-      } else if (code.status === 'unused') {
-        stats.available++;
-      }
-    });
+    for (const campaignName of uniqueNames) {
+      const { count: total } = await this.supabase
+        .from('promo_codes')
+        .select('*', { count: 'exact', head: true })
+        .eq('campaign_name', campaignName);
+        
+      const { count: used } = await this.supabase
+        .from('promo_codes')
+        .select('*', { count: 'exact', head: true })
+        .eq('campaign_name', campaignName)
+        .eq('status', 'used');
+        
+      const { count: available } = await this.supabase
+        .from('promo_codes')
+        .select('*', { count: 'exact', head: true })
+        .eq('campaign_name', campaignName)
+        .eq('status', 'unused');
+        
+      stats.push({
+        campaignName: campaignName as string,
+        total: total || 0,
+        used: used || 0,
+        available: available || 0
+      });
+    }
     
-    return Array.from(campaignMap.entries()).map(([campaignName, stats]) => ({
-      campaignName,
-      available: stats.available,
-      used: stats.used,
-      total: stats.total
-    }));
+    return stats;
   }
 
   async importPromoCodes(promoCodeArray: InsertPromoCode[]): Promise<{ imported: number; skipped: number; errors: string[] }> {
