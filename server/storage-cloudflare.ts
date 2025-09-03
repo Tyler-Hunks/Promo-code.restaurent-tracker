@@ -203,7 +203,7 @@ export class CloudflareStorage implements IStorage {
     const { data: allCodes } = await this.supabase
       .from('promo_codes')
       .select('status')
-      .limit(50000); // Remove the default 1000 row limit
+      .limit(100000); // Support up to 100K codes
 
     if (!allCodes) {
       return { total: 0, used: 0, available: 0, expired: 0 };
@@ -242,7 +242,7 @@ export class CloudflareStorage implements IStorage {
       .from('promo_codes')
       .select('campaign_name, status')
       .not('campaign_name', 'is', null)
-      .limit(50000); // Remove default row limits
+      .limit(100000); // Support up to 100K codes
     
     if (!allCodes) return [];
     
