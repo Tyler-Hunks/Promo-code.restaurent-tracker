@@ -73,13 +73,6 @@ export default function Login({ onLogin }: LoginProps) {
                 disabled={isLoading}
                 data-testid="input-api-key"
               />
-              <div className="text-xs text-muted-foreground space-y-1">
-                <p>Use this API key:</p>
-                <div className="bg-gray-100 p-2 rounded border break-all font-mono text-xs">
-                  promo-api-2024-secure-key
-                </div>
-                <p className="text-blue-600">Copy and paste the above key to log in</p>
-              </div>
             </div>
             <Button 
               type="submit" 
