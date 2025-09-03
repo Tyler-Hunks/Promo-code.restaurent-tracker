@@ -895,8 +895,8 @@ export default function Home() {
                       <p className="text-xs">Create codes with campaign names to see stats</p>
                     </div>
                   ) : (
-                    <div className="space-y-3 max-h-64 overflow-y-auto">
-                      {campaignStats.slice(0, 8).map((campaign) => (
+                    <div className="space-y-3">
+                      {campaignStats.map((campaign) => (
                         <div key={campaign.campaignName} className="bg-gray-50 rounded-lg p-3">
                           <div className="text-sm font-medium text-gray-900 mb-2 truncate">
                             {campaign.campaignName}
@@ -917,11 +917,6 @@ export default function Home() {
                           </div>
                         </div>
                       ))}
-                      {campaignStats.length > 8 && (
-                        <div className="text-center text-xs text-gray-500 pt-2">
-                          Showing top 8 campaigns
-                        </div>
-                      )}
                     </div>
                   )}
                 </div>
