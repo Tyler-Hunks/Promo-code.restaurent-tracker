@@ -8,19 +8,20 @@ compatibility_flags = ["nodejs_compat"]
 [assets]
 directory = "dist/public"
 
-# Development environment (default)
+# Environment variables (set these in Cloudflare Dashboard)
 [vars]
-NODE_ENV = "production"
+# DATABASE_URL = "your-supabase-connection-string"
+# SUPABASE_URL = "your-supabase-project-url" 
+# SUPABASE_ANON_KEY = "your-supabase-anon-key"
+# API_KEY = "your-api-key"
 
-# Production environment
 [env.production]
 name = "promo-code-manager-prod"
-route = { pattern = "your-domain.com/*", zone_name = "your-domain.com" }
 [env.production.vars]
-NODE_ENV = "production"
+# DATABASE_URL = "your-supabase-connection-string"
+# SUPABASE_URL = "your-supabase-project-url" 
+# SUPABASE_ANON_KEY = "your-supabase-anon-key"
+# API_KEY = "your-api-key"
 
-# Preview/Staging environment
 [env.preview]  
 name = "promo-code-manager-preview"
-[env.preview.vars]
-NODE_ENV = "production"
