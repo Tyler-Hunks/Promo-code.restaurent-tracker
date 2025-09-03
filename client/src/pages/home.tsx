@@ -35,6 +35,7 @@ export default function Home() {
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [showTokenManager, setShowTokenManager] = useState(false);
+  const [showAdvancedTools, setShowAdvancedTools] = useState(false);
   const { toast } = useToast();
 
   // Pagination states
@@ -852,6 +853,170 @@ export default function Home() {
       )}
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Advanced Tools Section */}
+        <div className="mb-8">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center">
+                  <Settings className="mr-2 h-5 w-5" />
+                  Advanced Tools
+                </CardTitle>
+                <Checkbox
+                  id="show-advanced"
+                  checked={showAdvancedTools}
+                  onCheckedChange={(checked) => setShowAdvancedTools(!!checked)}
+                  className="mr-2"
+                />
+                <Label htmlFor="show-advanced" className="text-sm cursor-pointer">
+                  {showAdvancedTools ? 'Hide' : 'Show'} Tools
+                </Label>
+              </div>
+            </CardHeader>
+            {showAdvancedTools && (
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {/* Pagination Toggle */}
+                  <div className="flex items-center space-x-2 p-3 bg-blue-50 rounded-lg">
+                    <Checkbox
+                      id="pagination-toggle"
+                      checked={usePagination}
+                      onCheckedChange={(checked) => {
+                        setUsePagination(!!checked);
+                        setCurrentPage(1);
+                      }}
+                      data-testid="checkbox-pagination"
+                    />
+                    <Label htmlFor="pagination-toggle" className="text-sm">
+                      Use Pagination ({totalRecords > 1000 ? 'Recommended' : 'Optional'})
+                    </Label>
+                  </div>
+                  
+                  {/* CSV Downloads */}
+                  <div className="space-y-2 p-3 bg-green-50 rounded-lg">
+                    <h4 className="text-sm font-medium text-green-800">Export Data</h4>
+                    <div className="flex flex-col gap-2">
+                      <Button
+                        onClick={downloadCurrentPageCSV}
+                        variant="outline"
+                        size="sm"
+                        disabled={codes.length === 0}
+                        className="border-green-300 text-green-600 hover:bg-green-100 text-xs h-8"
+                        data-testid="button-download-current"
+                      >
+                        <Download className="mr-1 h-3 w-3" />
+                        Page CSV ({codes.length})
+                      </Button>
+                      <Button
+                        onClick={() => downloadAllCodesCSV.mutate()}
+                        variant="outline"
+                        size="sm"
+                        disabled={downloadAllCodesCSV.isPending}
+                        className="border-blue-300 text-blue-600 hover:bg-blue-100 text-xs h-8"
+                        data-testid="button-download-all"
+                      >
+                        <Download className="mr-1 h-3 w-3" />
+                        {downloadAllCodesCSV.isPending ? "Downloading..." : `All CSV (${stats.total})`}
+                      </Button>
+                      {selectedCodes.length > 0 && (
+                        <Button
+                          onClick={downloadSelectedCodesCSV}
+                          variant="outline"
+                          size="sm"
+                          className="border-purple-300 text-purple-600 hover:bg-purple-100 text-xs h-8"
+                          data-testid="button-download-selected"
+                        >
+                          <Download className="mr-1 h-3 w-3" />
+                          Selected CSV ({selectedCodes.length})
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {/* Import Tools */}
+                  <div className="space-y-2 p-3 bg-yellow-50 rounded-lg">
+                    <h4 className="text-sm font-medium text-yellow-800">Import Data</h4>
+                    <div className="space-y-2">
+                      <input
+                        type="file"
+                        accept=".csv"
+                        onChange={handleFileUpload}
+                        className="hidden"
+                        id="csv-upload"
+                        data-testid="input-csv-file"
+                      />
+                      <Label htmlFor="csv-upload" className="cursor-pointer">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="border-yellow-300 text-yellow-600 hover:bg-yellow-100 text-xs h-8 w-full"
+                          data-testid="button-select-csv"
+                          asChild
+                        >
+                          <span>
+                            <Upload className="mr-1 h-3 w-3" />
+                            Select CSV
+                          </span>
+                        </Button>
+                      </Label>
+                      {importFile && (
+                        <Button
+                          onClick={handleImport}
+                          disabled={importMutation.isPending}
+                          size="sm"
+                          className="bg-yellow-600 hover:bg-yellow-700 text-xs h-8 w-full"
+                          data-testid="button-import-csv"
+                        >
+                          <Upload className="mr-1 h-3 w-3" />
+                          {importMutation.isPending ? "Importing..." : "Import CSV"}
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {/* Bulk Operations */}
+                  {stats.total > 1000 && (
+                    <div className="space-y-2 p-3 bg-red-50 rounded-lg">
+                      <h4 className="text-sm font-medium text-red-800">Bulk Operations</h4>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="border-red-300 text-red-600 hover:bg-red-100 text-xs h-8 w-full"
+                            data-testid="button-delete-all"
+                          >
+                            <Trash2 className="mr-1 h-3 w-3" />
+                            Clear All ({stats.total})
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Delete All Promo Codes</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              This will permanently delete all {stats.total} promo codes from the database for performance optimization. 
+                              This action cannot be undone. Make sure to download a backup first!
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction 
+                              onClick={() => deleteAllCodesMutation.mutate()}
+                              className="bg-red-600 hover:bg-red-700"
+                            >
+                              Delete All {stats.total} Codes
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            )}
+          </Card>
+        </div>
+        
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Redeem Code Section */}
           <div className="lg:col-span-1">
@@ -980,143 +1145,7 @@ export default function Home() {
                         className="w-full sm:w-40"
                         data-testid="input-discount-filter"
                       />
-                      
-                      {/* Pagination Toggle */}
-                      <div className="flex items-center space-x-2">
-                        <Checkbox
-                          id="pagination-toggle"
-                          checked={usePagination}
-                          onCheckedChange={(checked) => {
-                            setUsePagination(!!checked);
-                            setCurrentPage(1);
-                          }}
-                          data-testid="checkbox-pagination"
-                        />
-                        <Label htmlFor="pagination-toggle" className="text-sm">
-                          Use Pagination ({totalRecords > 1000 ? 'Recommended' : 'Optional'})
-                        </Label>
-                      </div>
-                      
-                      {/* CSV Download Button */}
-                      <div className="flex gap-2">
-                        <Button
-                          onClick={downloadCurrentPageCSV}
-                          variant="outline"
-                          disabled={codes.length === 0}
-                          className="border-green-300 text-green-600 hover:bg-green-50 hover:text-green-700"
-                          data-testid="button-download-current"
-                        >
-                          <Download className="mr-2 h-4 w-4" />
-                          Page CSV ({codes.length})
-                        </Button>
-                        <Button
-                          onClick={() => downloadAllCodesCSV.mutate()}
-                          variant="outline"
-                          disabled={downloadAllCodesCSV.isPending}
-                          className="border-blue-300 text-blue-600 hover:bg-blue-50 hover:text-blue-700"
-                          data-testid="button-download-all"
-                        >
-                          <Download className="mr-2 h-4 w-4" />
-                          {downloadAllCodesCSV.isPending ? "Downloading..." : `All CSV (${stats.total})`}
-                        </Button>
-                        {selectedCodes.length > 0 && (
-                          <Button
-                            onClick={downloadSelectedCodesCSV}
-                            variant="outline"
-                            className="border-purple-300 text-purple-600 hover:bg-purple-50 hover:text-purple-700"
-                            data-testid="button-download-selected"
-                          >
-                            <Download className="mr-2 h-4 w-4" />
-                            Selected CSV ({selectedCodes.length})
-                          </Button>
-                        )}
-                      </div>
-                      
-                      {/* Performance Optimization */}
-                      {stats.total > 1000 && (
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button
-                              variant="outline"
-                              className="border-red-300 text-red-600 hover:bg-red-50 hover:text-red-700"
-                              data-testid="button-delete-all"
-                            >
-                              <Trash2 className="mr-2 h-4 w-4" />
-                              Clear All ({stats.total})
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Delete All Promo Codes</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                This will permanently delete all {stats.total} promo codes from the database for performance optimization. 
-                                This action cannot be undone. Make sure to download a backup first!
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Cancel</AlertDialogCancel>
-                              <AlertDialogAction 
-                                onClick={() => deleteAllCodesMutation.mutate()}
-                                className="bg-red-600 hover:bg-red-700"
-                              >
-                                Delete All {stats.total} Codes
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                      )}
 
-                      {/* CSV Import Button */}
-                      <Dialog open={isImportModalOpen} onOpenChange={setIsImportModalOpen}>
-                        <DialogTrigger asChild>
-                          <Button
-                            variant="outline"
-                            className="border-blue-300 text-blue-600 hover:bg-blue-50 hover:text-blue-700"
-                          >
-                            <Upload className="mr-2 h-4 w-4" />
-                            Import CSV
-                          </Button>
-                        </DialogTrigger>
-                        <DialogContent className="sm:max-w-lg">
-                          <DialogHeader>
-                            <DialogTitle>Import Promo Codes from CSV</DialogTitle>
-                          </DialogHeader>
-                          <div className="space-y-4">
-                            <div className="text-sm text-gray-600">
-                              <p>Upload a CSV file with promo codes. Expected format:</p>
-                              <code className="bg-gray-100 px-2 py-1 rounded text-xs block mt-2">
-                                Code,Status,Campaign,Discount Value,Created At,Used At,Expires At
-                              </code>
-                            </div>
-                            
-                            <div>
-                              <Label htmlFor="csvFile">Select CSV File</Label>
-                              <Input
-                                id="csvFile"
-                                type="file"
-                                accept=".csv"
-                                onChange={handleFileUpload}
-                                className="mt-1"
-                              />
-                            </div>
-                            
-                            {importFile && (
-                              <div className="text-sm text-green-600">
-                                File selected: {importFile.name}
-                              </div>
-                            )}
-                            
-                            <Button
-                              onClick={handleImport}
-                              disabled={!importFile || importMutation.isPending}
-                              className="w-full bg-blue-600 hover:bg-blue-700"
-                            >
-                              <Upload className="mr-2 h-4 w-4" />
-                              {importMutation.isPending ? "Importing..." : "Import Codes"}
-                            </Button>
-                          </div>
-                        </DialogContent>
-                      </Dialog>
                     </div>
                   </div>
                   
