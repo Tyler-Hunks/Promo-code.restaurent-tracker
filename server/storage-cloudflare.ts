@@ -199,10 +199,11 @@ export class CloudflareStorage implements IStorage {
       .lt('expires_at', new Date().toISOString())
       .eq('status', 'unused');
 
-    // Get all codes and count by status
+    // Get all codes and count by status - remove Supabase's default row limits
     const { data: allCodes } = await this.supabase
       .from('promo_codes')
-      .select('status');
+      .select('status')
+      .limit(50000); // Remove the default 1000 row limit
 
     if (!allCodes) {
       return { total: 0, used: 0, available: 0, expired: 0 };
@@ -236,16 +237,41 @@ export class CloudflareStorage implements IStorage {
       .lt('expires_at', new Date().toISOString())
       .eq('status', 'unused');
 
-    // Get campaign stats using raw SQL through Supabase
-    const { data } = await this.supabase.rpc('get_campaign_stats');
+    // Get all codes and manually calculate campaign stats (since RPC might not exist)
+    const { data: allCodes } = await this.supabase
+      .from('promo_codes')
+      .select('campaign_name, status')
+      .not('campaign_name', 'is', null)
+      .limit(50000); // Remove default row limits
     
-    if (!data) return [];
+    if (!allCodes) return [];
     
-    return data.map((stat: any) => ({
-      campaignName: stat.campaign_name || 'Unknown',
-      available: stat.available || 0,
-      used: stat.used || 0,
-      total: stat.total || 0
+    // Group by campaign and calculate stats
+    const campaignMap = new Map<string, { total: number; used: number; available: number }>();
+    
+    allCodes.forEach((code: any) => {
+      const campaign = code.campaign_name;
+      if (!campaign) return;
+      
+      if (!campaignMap.has(campaign)) {
+        campaignMap.set(campaign, { total: 0, used: 0, available: 0 });
+      }
+      
+      const stats = campaignMap.get(campaign)!;
+      stats.total++;
+      
+      if (code.status === 'used') {
+        stats.used++;
+      } else if (code.status === 'unused') {
+        stats.available++;
+      }
+    });
+    
+    return Array.from(campaignMap.entries()).map(([campaignName, stats]) => ({
+      campaignName,
+      available: stats.available,
+      used: stats.used,
+      total: stats.total
     }));
   }
 
