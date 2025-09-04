@@ -1,4 +1,6 @@
--- Run this SQL in your Supabase SQL Editor to set up the database schema
+-- IMPORTANT: Run this COMPLETE SQL script in your Supabase SQL Editor to set up the database schema
+-- This creates all required tables including api_tokens (required for API token management)
+-- It's safe to run this multiple times - all tables use "IF NOT EXISTS"
 
 -- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
@@ -37,7 +39,11 @@ ALTER TABLE promo_codes ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Allow all operations" ON users FOR ALL USING (true);
 CREATE POLICY "Allow all operations" ON promo_codes FOR ALL USING (true);
 
--- Create API tokens table for permanent token management
+-- ========================================
+-- CRITICAL: API TOKENS TABLE (Required for Token Management)
+-- ========================================
+-- This table is REQUIRED for the TokenManager feature to work
+-- If missing, you'll get "Could not find table 'public.api_tokens'" error
 CREATE TABLE IF NOT EXISTS api_tokens (
     id VARCHAR PRIMARY KEY DEFAULT uuid_generate_v4()::VARCHAR,
     name TEXT NOT NULL,
@@ -72,5 +78,31 @@ BEGIN
     WHERE pc.campaign_name IS NOT NULL
     GROUP BY pc.campaign_name
     ORDER BY COUNT(*) DESC;
+END;
+$$ LANGUAGE plpgsql;
+
+-- ========================================
+-- SETUP VERIFICATION
+-- ========================================
+-- Run this query to verify all tables were created successfully:
+-- SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name;
+-- Expected tables: api_tokens, promo_codes, users
+
+-- Optional: RPC function for promo code stats (backup method)
+CREATE OR REPLACE FUNCTION get_promo_stats()
+RETURNS TABLE (
+    total INTEGER,
+    used INTEGER,
+    expired INTEGER,
+    available INTEGER
+) AS $$
+BEGIN
+    RETURN QUERY
+    SELECT 
+        COUNT(*)::INTEGER as total,
+        COUNT(CASE WHEN status = 'used' THEN 1 END)::INTEGER as used,
+        COUNT(CASE WHEN status = 'expired' THEN 1 END)::INTEGER as expired,
+        COUNT(CASE WHEN status = 'unused' THEN 1 END)::INTEGER as available
+    FROM promo_codes;
 END;
 $$ LANGUAGE plpgsql;

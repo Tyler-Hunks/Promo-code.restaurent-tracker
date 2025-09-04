@@ -2,14 +2,15 @@
 
 This is a promo code management system built with React, Express, TypeScript, and PostgreSQL. The application allows users to generate, view, and redeem promotional codes with different formatting options. It features a modern web interface built with shadcn/ui components and Tailwind CSS, backed by a REST API server and PostgreSQL database managed through Drizzle ORM.
 
-**Current Status**: Production-ready system deployed on Cloudflare Workers with Supabase PostgreSQL database, optimized for large datasets (10,000+ codes) with pagination, comprehensive download capabilities, and performance optimization features.
+**Current Status**: Production-ready system deployed on Cloudflare Workers with Supabase PostgreSQL database, optimized for large datasets (10,000+ codes) with pagination, comprehensive download capabilities, and API token management for secure access.
 
 ## Quick Setup Instructions
 
 1. **Login API Key**: Use this API key to log in: `promo-api-2024-secure-key`
-2. **Development**: Run `npm run dev` to start the development server on port 5000
-3. **Production**: Deploy to Cloudflare Workers with Supabase database connection
-4. **Features**: Campaign-based analytics, bulk operations, CSV import/export, Bearer token authentication
+2. **Database Setup**: Run the complete `supabase-setup.sql` script in Supabase SQL Editor (includes all required tables)
+3. **Development**: Run `npm run dev` to start the development server on port 5000
+4. **Production**: Deploy to Cloudflare Workers with Supabase database connection
+5. **Features**: Campaign-based analytics, bulk operations, CSV import/export, API token management, Bearer token authentication
 
 # User Preferences
 
@@ -43,6 +44,7 @@ Preferred communication style: Simple, everyday language.
 - **Tables**: 
   - Users table with UUID primary keys
   - Promo codes table with status tracking, automatic expiration, and full campaign support
+  - API tokens table for permanent token management and secure authentication
 - **Features**: Automatic expired code detection, bulk operations, CSV import/export, pagination for large datasets
 - **Performance**: Optimized for 10,000+ codes with indexed queries and pagination
 

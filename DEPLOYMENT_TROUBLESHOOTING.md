@@ -93,6 +93,26 @@ GET /api/campaigns/stats 401 :: {"message":"Unauthorized: Invalid token"}
 
 **Root Cause:** Expired or invalid authentication tokens in browser storage
 
+#### Issue: API Token Creation Fails
+
+**Symptoms:**
+- Error: "Cannot read properties of null (reading: id)"
+- Error: "Could not find table 'public.api_tokens' in the schema cache"
+- TokenManager shows creation failed
+
+**Root Cause:**
+The `api_tokens` table is missing from your Supabase database
+
+**Solution:**
+1. **Open Supabase Dashboard** → Navigate to SQL Editor
+2. **Run the complete setup script** from `supabase-setup.sql`
+3. **Verify table creation**: Run this query in SQL Editor:
+   ```sql
+   SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name;
+   ```
+   Expected tables: `api_tokens`, `promo_codes`, `users`
+4. **Redeploy** your Cloudflare Worker after table creation
+
 #### Issue: Stats appear capped at 1000 / Campaign stats not showing
 **Symptoms:**
 - Stats dashboard shows limited data
