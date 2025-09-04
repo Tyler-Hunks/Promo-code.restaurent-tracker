@@ -372,7 +372,7 @@ export class CloudflareStorage implements IStorage {
       .map(b => b.toString(16).padStart(2, '0'))
       .join('');
     
-    const { data } = await this.supabase
+    const { data, error } = await this.supabase
       .from('api_tokens')
       .insert({
         name: apiTokenData.name,
@@ -382,6 +382,16 @@ export class CloudflareStorage implements IStorage {
       })
       .select()
       .single();
+    
+    if (error) {
+      console.error('Supabase token creation error:', error);
+      throw new Error(`Failed to create API token: ${error.message}`);
+    }
+    
+    if (!data) {
+      console.error('Supabase returned null data for token creation');
+      throw new Error('Failed to create API token: No data returned');
+    }
     
     return {
       id: data.id,
