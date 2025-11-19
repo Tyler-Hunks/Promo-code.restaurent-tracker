@@ -199,6 +199,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Create a single promo code with specific code value
+  app.post("/api/promo-codes", async (req, res) => {
+    try {
+      const validation = insertPromoCodeSchema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({ 
+          message: "Invalid promo code data", 
+          errors: validation.error.errors 
+        });
+      }
+
+      const promoCodeData = validation.data;
+      const createdCode = await storage.createPromoCode({
+        ...promoCodeData,
+        expiresAt: promoCodeData.expiresAt ? new Date(promoCodeData.expiresAt) : undefined
+      });
+      
+      res.status(201).json(createdCode);
+    } catch (error) {
+      if (error instanceof Error) {
+        if (error.message.includes("unique constraint") || error.message.includes("duplicate") || error.message.includes("already exists")) {
+          return res.status(409).json({ message: "Code already exists" });
+        }
+        res.status(400).json({ message: error.message });
+      } else {
+        res.status(500).json({ message: "Failed to create promo code" });
+      }
+    }
+  });
+
   // Get promo code stats
   app.get("/api/promo-codes/stats", async (req, res) => {
     try {
