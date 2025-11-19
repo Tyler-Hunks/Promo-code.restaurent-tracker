@@ -75,6 +75,15 @@ export const apiTokenGenerateSchema = z.object({
   name: z.string().min(1).max(100),
 });
 
+export const deleteBulkByFiltersSchema = z.object({
+  campaign: z.string().trim().min(1).optional(),
+  status: z.enum(["unused", "used", "expired"]).optional(),
+  discountValue: z.string().trim().min(1).optional(),
+}).refine((data) => data.campaign || data.status || data.discountValue, {
+  message: "At least one filter (campaign, status, or discountValue) is required",
+  path: [],
+});
+
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 export type InsertPromoCode = z.infer<typeof insertPromoCodeSchema>;
@@ -85,3 +94,4 @@ export type CsvImport = z.infer<typeof csvImportSchema>;
 export type InsertApiToken = z.infer<typeof insertApiTokenSchema>;
 export type ApiToken = typeof apiTokens.$inferSelect;
 export type ApiTokenGenerate = z.infer<typeof apiTokenGenerateSchema>;
+export type DeleteBulkByFilters = z.infer<typeof deleteBulkByFiltersSchema>;

@@ -42,6 +42,7 @@ export interface IStorage {
   deletePromoCode(code: string): Promise<boolean>;
   deleteBulkPromoCodes(codes: string[]): Promise<number>;
   deleteAllPromoCodes(): Promise<number>;
+  deleteBulkByFilters(filters: { campaign?: string; status?: string; discountValue?: string }): Promise<number>;
   togglePromoCodeStatus(code: string, newStatus: "unused" | "used"): Promise<PromoCode | undefined>;
   getPromoCodeStats(): Promise<{ total: number; used: number; available: number; expired: number }>;
   getCampaigns(): Promise<string[]>;
@@ -289,6 +290,20 @@ export class MemStorage implements IStorage {
     return total;
   }
 
+  async deleteBulkByFilters(filters: { campaign?: string; status?: string; discountValue?: string }): Promise<number> {
+    // Filters are already validated and sanitized by Zod schema
+    const allCodes = Array.from(this.promoCodes.values());
+    const codesToDelete = allCodes.filter(code => {
+      if (filters.campaign && code.campaignName !== filters.campaign) return false;
+      if (filters.status && code.status !== filters.status) return false;
+      if (filters.discountValue && code.discountValue !== filters.discountValue) return false;
+      return true;
+    });
+    
+    codesToDelete.forEach(code => this.promoCodes.delete(code.id));
+    return codesToDelete.length;
+  }
+
   async togglePromoCodeStatus(code: string, newStatus: "unused" | "used"): Promise<PromoCode | undefined> {
     const promoCode = await this.getPromoCodeByCode(code);
     if (!promoCode) return undefined;
@@ -529,6 +544,23 @@ export class DatabaseStorage implements IStorage {
 
   async deleteAllPromoCodes(): Promise<number> {
     const result = await db.delete(promoCodes);
+    return result.rowCount || 0;
+  }
+
+  async deleteBulkByFilters(filters: { campaign?: string; status?: string; discountValue?: string }): Promise<number> {
+    // Filters are already validated and sanitized by Zod schema
+    const conditions = [];
+    if (filters.campaign) {
+      conditions.push(eq(promoCodes.campaignName, filters.campaign));
+    }
+    if (filters.status) {
+      conditions.push(eq(promoCodes.status, filters.status as any));
+    }
+    if (filters.discountValue) {
+      conditions.push(eq(promoCodes.discountValue, filters.discountValue));
+    }
+    
+    const result = await db.delete(promoCodes).where(and(...conditions));
     return result.rowCount || 0;
   }
 

@@ -6,10 +6,10 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Copy, Ticket, Plus, Layers, Search, Trash2, AlertTriangle, Download, Upload, Settings } from "lucide-react";
+import { Copy, Ticket, Plus, Layers, Search, Trash2, AlertTriangle, Download, Upload, Settings, Filter } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { PromoCode, BulkGenerate, CampaignGenerate } from "@shared/schema";
@@ -36,6 +36,11 @@ export default function Home() {
   const [importFile, setImportFile] = useState<File | null>(null);
   const [showTokenManager, setShowTokenManager] = useState(false);
   const [showAdvancedTools, setShowAdvancedTools] = useState(false);
+  const [isAdvancedDeleteOpen, setIsAdvancedDeleteOpen] = useState(false);
+  const [deleteFilterCampaign, setDeleteFilterCampaign] = useState("");
+  const [deleteFilterStatus, setDeleteFilterStatus] = useState("");
+  const [deleteFilterDiscount, setDeleteFilterDiscount] = useState("");
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const { toast } = useToast();
 
   // Pagination states
@@ -320,6 +325,35 @@ export default function Home() {
       toast({
         title: "Error",
         description: "Failed to delete all codes",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Advanced bulk delete by filters
+  const deleteByFiltersMutation = useMutation({
+    mutationFn: async (filters: { campaign?: string; status?: string; discountValue?: string }) => {
+      const response = await apiRequest("POST", "/api/promo-codes/delete-by-filters", filters);
+      return response.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/promo-codes"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/promo-codes/stats"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/campaigns"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/campaigns/stats"] });
+      setIsAdvancedDeleteOpen(false);
+      setDeleteFilterCampaign("");
+      setDeleteFilterStatus("");
+      setDeleteFilterDiscount("");
+      toast({
+        title: "Codes Deleted",
+        description: `${data.deletedCount} promo codes deleted successfully!`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete promo codes by filters",
         variant: "destructive",
       });
     },
@@ -974,6 +1008,196 @@ export default function Home() {
                     </div>
                   </div>
                   
+                  {/* Advanced Bulk Delete */}
+                  <div className="space-y-2 p-3 bg-orange-50 rounded-lg">
+                    <h4 className="text-sm font-medium text-orange-800">Advanced Bulk Delete</h4>
+                    <Dialog 
+                      open={isAdvancedDeleteOpen} 
+                      onOpenChange={(open) => {
+                        setIsAdvancedDeleteOpen(open);
+                        if (!open) setDeleteConfirmText(""); // Clear when dialog closes
+                      }}
+                    >
+                      <DialogTrigger asChild>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="border-orange-300 text-orange-600 hover:bg-orange-100 text-xs h-8 w-full"
+                          data-testid="button-advanced-delete"
+                        >
+                          <Filter className="mr-1 h-3 w-3" />
+                          Delete by Filters
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent className="sm:max-w-md" data-testid="dialog-advanced-delete">
+                        <DialogHeader>
+                          <DialogTitle data-testid="title-advanced-delete">Advanced Bulk Delete</DialogTitle>
+                          <DialogDescription data-testid="description-advanced-delete">
+                            Delete promo codes based on campaign, status, or discount value. At least one filter is required.
+                          </DialogDescription>
+                        </DialogHeader>
+                        <div className="space-y-4 py-4">
+                          {/* Campaign Filter */}
+                          <div className="space-y-2">
+                            <Label htmlFor="delete-campaign" data-testid="label-delete-campaign">Campaign Name (optional)</Label>
+                            <Select value={deleteFilterCampaign} onValueChange={setDeleteFilterCampaign}>
+                              <SelectTrigger id="delete-campaign" data-testid="select-delete-campaign">
+                                <SelectValue placeholder="Select campaign to delete..." />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="all" data-testid="option-all-campaigns">All Campaigns</SelectItem>
+                                {campaigns.map((campaign) => (
+                                  <SelectItem key={campaign} value={campaign} data-testid={`option-campaign-${campaign}`}>
+                                    {campaign}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          {/* Status Filter */}
+                          <div className="space-y-2">
+                            <Label htmlFor="delete-status" data-testid="label-delete-status">Status (optional)</Label>
+                            <Select value={deleteFilterStatus} onValueChange={setDeleteFilterStatus}>
+                              <SelectTrigger id="delete-status" data-testid="select-delete-status">
+                                <SelectValue placeholder="Select status to delete..." />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="unused" data-testid="option-unused">Unused</SelectItem>
+                                <SelectItem value="used" data-testid="option-used">Used</SelectItem>
+                                <SelectItem value="expired" data-testid="option-expired">Expired</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          {/* Discount Value Filter */}
+                          <div className="space-y-2">
+                            <Label htmlFor="delete-discount" data-testid="label-delete-discount">Discount Value (optional)</Label>
+                            <Input
+                              id="delete-discount"
+                              placeholder="e.g., 10%, $50, TESTCODE"
+                              value={deleteFilterDiscount}
+                              onChange={(e) => setDeleteFilterDiscount(e.target.value)}
+                              data-testid="input-delete-discount"
+                            />
+                          </div>
+
+                          {/* Preview Info */}
+                          {(deleteFilterCampaign || deleteFilterStatus || deleteFilterDiscount) && (
+                            <div className="p-3 bg-orange-50 rounded border border-orange-200" data-testid="preview-filters">
+                              <p className="text-sm text-orange-800 font-medium mb-1">Filters to apply:</p>
+                              <ul className="text-xs text-orange-700 space-y-1">
+                                {deleteFilterCampaign && deleteFilterCampaign !== 'all' && (
+                                  <li data-testid="preview-campaign">• Campaign: <strong>{deleteFilterCampaign}</strong></li>
+                                )}
+                                {deleteFilterStatus && (
+                                  <li data-testid="preview-status">• Status: <strong>{deleteFilterStatus}</strong></li>
+                                )}
+                                {deleteFilterDiscount && (
+                                  <li data-testid="preview-discount">• Discount: <strong>{deleteFilterDiscount}</strong></li>
+                                )}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+                        <DialogFooter className="gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => {
+                              setDeleteFilterCampaign("");
+                              setDeleteFilterStatus("");
+                              setDeleteFilterDiscount("");
+                            }}
+                            data-testid="button-clear-filters"
+                          >
+                            Clear Filters
+                          </Button>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button
+                                type="button"
+                                variant="destructive"
+                                disabled={!deleteFilterCampaign && !deleteFilterStatus && !deleteFilterDiscount}
+                                data-testid="button-show-confirmation"
+                              >
+                                Preview Deletion
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent data-testid="alert-confirm-delete">
+                              <AlertDialogHeader>
+                                <AlertDialogTitle data-testid="alert-title">Confirm Deletion</AlertDialogTitle>
+                                <AlertDialogDescription data-testid="alert-description">
+                                  You are about to permanently delete promo codes matching these filters:
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <div className="space-y-4">
+                                <div className="p-4 bg-red-50 rounded border border-red-200" data-testid="confirmation-summary">
+                                  <ul className="text-sm space-y-2">
+                                    {deleteFilterCampaign && deleteFilterCampaign !== 'all' && (
+                                      <li data-testid="confirm-campaign">
+                                        <strong>Campaign:</strong> {deleteFilterCampaign}
+                                      </li>
+                                    )}
+                                    {deleteFilterStatus && (
+                                      <li data-testid="confirm-status">
+                                        <strong>Status:</strong> {deleteFilterStatus}
+                                      </li>
+                                    )}
+                                    {deleteFilterDiscount && (
+                                      <li data-testid="confirm-discount">
+                                        <strong>Discount Value:</strong> {deleteFilterDiscount}
+                                      </li>
+                                    )}
+                                  </ul>
+                                  <p className="mt-3 text-xs text-red-700" data-testid="warning-text">
+                                    ⚠️ This action cannot be undone. All codes matching these filters will be permanently deleted.
+                                  </p>
+                                </div>
+                                <div className="space-y-2">
+                                  <Label htmlFor="confirm-delete-text" className="text-sm font-medium" data-testid="label-confirm-text">
+                                    Type <strong className="text-red-600">DELETE</strong> to confirm:
+                                  </Label>
+                                  <Input
+                                    id="confirm-delete-text"
+                                    value={deleteConfirmText}
+                                    onChange={(e) => setDeleteConfirmText(e.target.value)}
+                                    placeholder="Type DELETE"
+                                    className="font-mono"
+                                    data-testid="input-confirm-delete"
+                                  />
+                                </div>
+                              </div>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel 
+                                  onClick={() => setDeleteConfirmText("")}
+                                  data-testid="button-cancel-delete"
+                                >
+                                  Cancel
+                                </AlertDialogCancel>
+                                <AlertDialogAction 
+                                  onClick={() => {
+                                    deleteByFiltersMutation.mutate({
+                                      campaign: deleteFilterCampaign && deleteFilterCampaign !== 'all' ? deleteFilterCampaign : undefined,
+                                      status: deleteFilterStatus || undefined,
+                                      discountValue: deleteFilterDiscount || undefined,
+                                    });
+                                    setDeleteConfirmText(""); // Clear after mutation
+                                  }}
+                                  disabled={deleteConfirmText !== "DELETE" || deleteByFiltersMutation.isPending}
+                                  className="bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                                  data-testid="button-final-confirm-delete"
+                                >
+                                  {deleteByFiltersMutation.isPending ? "Deleting..." : "Yes, Delete Codes"}
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </DialogFooter>
+                      </DialogContent>
+                    </Dialog>
+                  </div>
+
                   {/* Bulk Operations */}
                   {stats.total > 1000 && (
                     <div className="space-y-2 p-3 bg-red-50 rounded-lg">

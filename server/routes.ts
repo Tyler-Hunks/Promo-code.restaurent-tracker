@@ -1,8 +1,9 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertPromoCodeSchema, bulkGenerateSchema, campaignGenerateSchema, csvImportSchema, apiTokenGenerateSchema, type BulkGenerate, type CampaignGenerate, type CsvImport, type ApiTokenGenerate } from "@shared/schema";
+import { insertPromoCodeSchema, bulkGenerateSchema, campaignGenerateSchema, csvImportSchema, apiTokenGenerateSchema, deleteBulkByFiltersSchema, type BulkGenerate, type CampaignGenerate, type CsvImport, type ApiTokenGenerate } from "@shared/schema";
 import crypto from "crypto";
+import { z } from "zod";
 
 // Generate secure token
 function generateSecureToken(): string {
@@ -411,6 +412,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Delete all codes error:", error);
       res.status(500).json({ 
         message: "Failed to delete all promo codes",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  // Advanced bulk delete by filters
+  app.post("/api/promo-codes/delete-by-filters", async (req, res) => {
+    try {
+      // Validate using Zod schema - parse() throws on validation failure
+      const filters = deleteBulkByFiltersSchema.parse(req.body);
+      
+      // Pass validated, sanitized data directly to storage without revalidation
+      const deletedCount = await storage.deleteBulkByFilters(filters);
+      
+      res.json({ 
+        message: `${deletedCount} promo codes deleted successfully`, 
+        deletedCount,
+        filters
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          message: error.errors[0]?.message || "Invalid filter parameters",
+          errors: error.errors
+        });
+      }
+      console.error("Delete by filters error:", error);
+      res.status(500).json({ 
+        message: "Failed to delete promo codes by filters",
         error: error instanceof Error ? error.message : "Unknown error"
       });
     }

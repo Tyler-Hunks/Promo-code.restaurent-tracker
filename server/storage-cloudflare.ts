@@ -191,6 +191,32 @@ export class CloudflareStorage implements IStorage {
     return deletedCodes?.length || 0;
   }
 
+  async deleteBulkByFilters(filters: { campaign?: string; status?: string; discountValue?: string }): Promise<number> {
+    // Filters are already validated and sanitized by Zod schema
+    let query = this.supabase
+      .from('promo_codes')
+      .delete();
+    
+    if (filters.campaign) {
+      query = query.eq('campaign_name', filters.campaign);
+    }
+    if (filters.status) {
+      query = query.eq('status', filters.status);
+    }
+    if (filters.discountValue) {
+      query = query.eq('discount_value', filters.discountValue);
+    }
+    
+    const { data: deletedCodes, error } = await query.select('id');
+    
+    if (error) {
+      console.error('Delete by filters error:', error);
+      throw new Error(`Failed to delete codes: ${error.message}`);
+    }
+    
+    return deletedCodes?.length || 0;
+  }
+
   async getPromoCodeStats(): Promise<{ total: number; used: number; available: number; expired: number }> {
     // Update expired codes first
     await this.supabase
