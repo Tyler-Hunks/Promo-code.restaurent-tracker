@@ -262,15 +262,29 @@ export class CloudflareStorage implements IStorage {
   }
 
   async getCampaigns(): Promise<string[]> {
-    const { data: campaigns } = await this.supabase
+    console.log('getCampaigns: Starting query...');
+    const { data: campaigns, error } = await this.supabase
       .from('promo_codes')
       .select('campaign_name')
-      .not('campaign_name', 'is', null);
+      .not('campaign_name', 'is', null)
+      .neq('campaign_name', '');  // Also exclude empty strings
     
-    if (!campaigns) return [];
+    if (error) {
+      console.error('Error fetching campaigns:', error);
+      throw new Error(`Failed to fetch campaigns: ${error.message}`);
+    }
+    
+    console.log('getCampaigns: Raw data from Supabase:', campaigns);
+    
+    if (!campaigns || campaigns.length === 0) {
+      console.log('getCampaigns: No campaigns found');
+      return [];
+    }
     
     const uniqueNames = new Set(campaigns.map((c: any) => c.campaign_name));
-    return Array.from(uniqueNames).filter(Boolean) as string[];
+    const result = Array.from(uniqueNames).filter(Boolean) as string[];
+    console.log('getCampaigns: Unique campaign names:', result);
+    return result;
   }
 
   async getCampaignStats(): Promise<Array<{ campaignName: string; available: number; used: number; total: number }>> {

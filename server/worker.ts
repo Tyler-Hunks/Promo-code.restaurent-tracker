@@ -336,10 +336,22 @@ async function handleAPI(request: Request, env: Env): Promise<Response> {
     }
 
     if (path === '/api/campaigns' && method === 'GET') {
-      const campaigns = await storageInstance.getCampaigns();
-      return new Response(JSON.stringify(campaigns), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
+      try {
+        const campaigns = await storageInstance.getCampaigns();
+        console.log('Campaigns fetched:', campaigns);
+        return new Response(JSON.stringify(campaigns), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      } catch (error) {
+        console.error('Error in /api/campaigns:', error);
+        return new Response(JSON.stringify({ 
+          message: 'Failed to fetch campaigns',
+          error: error instanceof Error ? error.message : 'Unknown error'
+        }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
     }
 
     if (path === '/api/campaigns/stats' && method === 'GET') {
