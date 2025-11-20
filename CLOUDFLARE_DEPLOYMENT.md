@@ -2,10 +2,26 @@
 
 This guide will help you deploy your promo code manager to Cloudflare Workers.
 
+## Understanding Secrets
+
+**Important Distinction:**
+
+1. **Replit Secrets** (✅ already configured)
+   - Used by your DEV environment running on Replit
+   - When you run `npm run dev`, it uses these
+   - CLOUDFLARE_API_TOKEN here is used by wrangler CLI to deploy
+
+2. **Cloudflare Secrets** (❌ need to add after deployment)
+   - Used by your PRODUCTION environment on Cloudflare Workers
+   - Stored encrypted in Cloudflare's infrastructure
+   - Separate from Replit because they live in different systems
+
+You need BOTH sets because dev and production are separate environments!
+
 ## Prerequisites
 
-- ✅ Cloudflare API Token (already added to Replit Secrets)
-- ✅ Supabase database credentials (already added to Replit Secrets)
+- ✅ Cloudflare API Token (already added to Replit Secrets - for deployment)
+- ✅ Supabase database credentials (already added to Replit Secrets - for dev)
 - ✅ `wrangler.toml` configured (done!)
 
 ## Step 1: Build the Application
