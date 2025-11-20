@@ -263,27 +263,36 @@ export class CloudflareStorage implements IStorage {
 
   async getCampaigns(): Promise<string[]> {
     console.log('getCampaigns: Starting query...');
-    const { data: campaigns, error } = await this.supabase
-      .from('promo_codes')
-      .select('campaign_name')
-      .not('campaign_name', 'is', null)
-      .neq('campaign_name', '');  // Also exclude empty strings
+    
+    // Use the RPC function to get campaign stats, then extract campaign names
+    // This is more efficient than fetching all codes
+    const { data: campaignStats, error } = await this.supabase
+      .rpc('get_campaign_stats');
     
     if (error) {
-      console.error('Error fetching campaigns:', error);
-      throw new Error(`Failed to fetch campaigns: ${error.message}`);
+      console.error('Error fetching campaigns via RPC:', error);
+      // Fallback: Try direct query with distinct
+      const { data: campaigns, error: selectError } = await this.supabase
+        .from('promo_codes')
+        .select('campaign_name')
+        .not('campaign_name', 'is', null)
+        .neq('campaign_name', '');
+      
+      if (selectError) {
+        console.error('Error fetching campaigns:', selectError);
+        throw new Error(`Failed to fetch campaigns: ${selectError.message}`);
+      }
+      
+      const uniqueNames = new Set(campaigns?.map((c: any) => c.campaign_name) || []);
+      return Array.from(uniqueNames).filter(Boolean) as string[];
     }
     
-    console.log('getCampaigns: Raw data from Supabase:', campaigns);
+    // Extract campaign names from stats (exclude empty names)
+    const result = campaignStats
+      .map((stat: any) => stat.campaign_name)
+      .filter((name: string) => name && name.trim() !== '');
     
-    if (!campaigns || campaigns.length === 0) {
-      console.log('getCampaigns: No campaigns found');
-      return [];
-    }
-    
-    const uniqueNames = new Set(campaigns.map((c: any) => c.campaign_name));
-    const result = Array.from(uniqueNames).filter(Boolean) as string[];
-    console.log('getCampaigns: Unique campaign names:', result);
+    console.log('getCampaigns: Campaign names from stats:', result);
     return result;
   }
 
