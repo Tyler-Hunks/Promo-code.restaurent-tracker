@@ -8,20 +8,15 @@ compatibility_flags = ["nodejs_compat"]
 [assets]
 directory = "dist/public"
 
-# Environment variables (set these in Cloudflare Dashboard)
-[vars]
-# DATABASE_URL = "your-supabase-connection-string"
-# SUPABASE_URL = "your-supabase-project-url" 
-# SUPABASE_ANON_KEY = "your-supabase-anon-key"
-# API_KEY = "your-api-key"
+# Note: Secrets should be set using: wrangler secret put <KEY_NAME>
+# Run these commands after first deployment:
+# wrangler secret put DATABASE_URL
+# wrangler secret put SUPABASE_URL
+# wrangler secret put SUPABASE_ANON_KEY
+# wrangler secret put API_KEY
 
 [env.production]
 name = "promo-code-manager-prod"
-[env.production.vars]
-# DATABASE_URL = "your-supabase-connection-string"
-# SUPABASE_URL = "your-supabase-project-url" 
-# SUPABASE_ANON_KEY = "your-supabase-anon-key"
-# API_KEY = "your-api-key"
 
 [env.preview]  
 name = "promo-code-manager-preview"
