@@ -1,13 +1,12 @@
 # Cloudflare Workers configuration
 name = "promo-code-manager"
 main = "dist/worker.js"
-compatibility_date = "2024-08-10"
+compatibility_date = "2024-09-19"
 compatibility_flags = ["nodejs_compat"]
 
 # Static assets (React build files)
 [assets]
-directory = "dist/public"
-binding = "ASSETS"
+directory = "./dist/public"
 
 # Note: Secrets should be set using: wrangler secret put <KEY_NAME>
 # Run these commands after first deployment:
