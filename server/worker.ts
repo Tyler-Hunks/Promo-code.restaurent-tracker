@@ -1,6 +1,7 @@
 // Cloudflare Worker entry point
 import { storage } from "./storage-cloudflare";
-import { insertPromoCodeSchema, bulkGenerateSchema, apiTokenGenerateSchema } from "../shared/schema";
+import { insertPromoCodeSchema, bulkGenerateSchema, apiTokenGenerateSchema, deleteBulkByFiltersSchema } from "../shared/schema";
+import { z } from "zod";
 
 // Types for Cloudflare Worker environment
 interface Env {
@@ -474,7 +475,7 @@ async function handleAPI(request: Request, env: Env): Promise<Response> {
     }
 
     // Delete single promo code
-    if (path.startsWith('/api/promo-codes/') && !path.includes('/redeem') && !path.includes('/toggle-status') && method === 'DELETE') {
+    if (path.startsWith('/api/promo-codes/') && !path.includes('/redeem') && !path.includes('/toggle-status') && !path.includes('/delete-by-filters') && method === 'DELETE') {
       const code = path.split('/')[3];
       const deleted = await storageInstance.deletePromoCode(code);
       
@@ -488,6 +489,48 @@ async function handleAPI(request: Request, env: Env): Promise<Response> {
       return new Response(JSON.stringify({ message: "Promo code deleted successfully", code }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
+    }
+
+    // Advanced bulk delete by filters
+    if (path === '/api/promo-codes/delete-by-filters' && method === 'POST') {
+      try {
+        const body = await request.json();
+        console.log('Delete by filters request:', body);
+        
+        // Validate using Zod schema
+        const filters = deleteBulkByFiltersSchema.parse(body);
+        console.log('Validated filters:', filters);
+        
+        // Delete codes matching filters
+        const deletedCount = await storageInstance.deleteBulkByFilters(filters);
+        console.log('Deleted count:', deletedCount);
+        
+        return new Response(JSON.stringify({ 
+          message: `${deletedCount} promo codes deleted successfully`, 
+          deletedCount,
+          filters
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      } catch (error) {
+        console.error('Delete by filters error:', error);
+        if (error instanceof Error && error.name === 'ZodError') {
+          return new Response(JSON.stringify({ 
+            message: 'Invalid filter parameters',
+            error: error.message
+          }), {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+        return new Response(JSON.stringify({ 
+          message: 'Failed to delete promo codes by filters',
+          error: error instanceof Error ? error.message : 'Unknown error'
+        }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
     }
 
     // Token management endpoints
