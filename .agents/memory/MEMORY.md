@@ -1,0 +1,1 @@
+- [Cloudflare + Supabase ops runbook](cloudflare-supabase-ops.md) — deploy needs `npm run build` first; new Supabase DB needs `supabase-setup.sql` (tables + RPCs) or `/api/campaigns` 500s with error 1016.

@@ -264,35 +264,39 @@ export class CloudflareStorage implements IStorage {
   async getCampaigns(): Promise<string[]> {
     console.log('getCampaigns: Starting query...');
     
-    // Use the RPC function to get campaign stats, then extract campaign names
-    // This is more efficient than fetching all codes
+    // Preferred path: use the get_campaign_stats RPC. This avoids Supabase's
+    // default row limit so all unique campaigns are returned even with large
+    // datasets (10,000+ codes).
     const { data: campaignStats, error } = await this.supabase
       .rpc('get_campaign_stats');
     
-    if (error) {
-      console.error('Error fetching campaigns via RPC:', error);
-      // Fallback: Try direct query with distinct
-      const { data: campaigns, error: selectError } = await this.supabase
-        .from('promo_codes')
-        .select('campaign_name')
-        .not('campaign_name', 'is', null)
-        .neq('campaign_name', '');
-      
-      if (selectError) {
-        console.error('Error fetching campaigns:', selectError);
-        throw new Error(`Failed to fetch campaigns: ${selectError.message}`);
-      }
-      
-      const uniqueNames = new Set(campaigns?.map((c: any) => c.campaign_name) || []);
-      return Array.from(uniqueNames).filter(Boolean) as string[];
+    if (!error && campaignStats) {
+      const result = campaignStats
+        .map((stat: any) => stat.campaign_name)
+        .filter((name: string) => name && name.trim() !== '');
+      console.log('getCampaigns: Campaign names from RPC:', result);
+      return result;
     }
     
-    // Extract campaign names from stats (exclude empty names)
-    const result = campaignStats
-      .map((stat: any) => stat.campaign_name)
-      .filter((name: string) => name && name.trim() !== '');
+    // The RPC may be missing (e.g. a freshly provisioned database where
+    // supabase-setup.sql has not been run yet). Fall back to a direct query
+    // instead of failing the request so the UI keeps working.
+    console.warn('getCampaigns: RPC unavailable, falling back to direct query:', error);
+    const { data: campaigns, error: selectError } = await this.supabase
+      .from('promo_codes')
+      .select('campaign_name')
+      .not('campaign_name', 'is', null)
+      .neq('campaign_name', '');
     
-    console.log('getCampaigns: Campaign names from stats:', result);
+    if (selectError) {
+      // Don't crash the dropdown — return an empty list and log the cause.
+      console.error('getCampaigns: Fallback query failed:', selectError);
+      return [];
+    }
+    
+    const uniqueNames = new Set(campaigns?.map((c: any) => c.campaign_name) || []);
+    const result = Array.from(uniqueNames).filter(Boolean) as string[];
+    console.log('getCampaigns: Campaign names from fallback:', result);
     return result;
   }
 
