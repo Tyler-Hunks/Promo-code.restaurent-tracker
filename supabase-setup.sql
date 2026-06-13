@@ -36,8 +36,13 @@ ALTER TABLE promo_codes ENABLE ROW LEVEL SECURITY;
 
 -- Create policies (adjust based on your authentication needs)
 -- For now, allow all operations with valid API key (handled in application layer)
-CREATE POLICY "Allow all operations" ON users FOR ALL USING (true);
-CREATE POLICY "Allow all operations" ON promo_codes FOR ALL USING (true);
+-- DROP first so this script is safe to re-run on a database where the tables
+-- already exist (e.g. created via the Supabase dashboard, which turns on RLS
+-- with NO policy and silently blocks all writes via the anon key).
+DROP POLICY IF EXISTS "Allow all operations" ON users;
+DROP POLICY IF EXISTS "Allow all operations" ON promo_codes;
+CREATE POLICY "Allow all operations" ON users FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all operations" ON promo_codes FOR ALL USING (true) WITH CHECK (true);
 
 -- ========================================
 -- CRITICAL: API TOKENS TABLE (Required for Token Management)
@@ -57,7 +62,8 @@ CREATE INDEX IF NOT EXISTS idx_api_tokens_token ON api_tokens(token);
 
 -- RLS for API tokens
 ALTER TABLE api_tokens ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Allow all operations" ON api_tokens FOR ALL USING (true);
+DROP POLICY IF EXISTS "Allow all operations" ON api_tokens;
+CREATE POLICY "Allow all operations" ON api_tokens FOR ALL USING (true) WITH CHECK (true);
 
 -- Optional: RPC function for campaign stats (backup method)
 CREATE OR REPLACE FUNCTION get_campaign_stats()

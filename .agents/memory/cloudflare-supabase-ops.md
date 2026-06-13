@@ -31,3 +31,21 @@ description: Deploy gotchas and new-database setup steps for the promo-code-mana
 
 **How to apply:** after any DB swap, run `supabase-setup.sql` on the new project, then
 rebuild + redeploy, then re-import data via CSV (old data does not transfer).
+
+# Debugging an "empty database" that is really UNREACHABLE
+
+**Why:** several read methods in `storage-cloudflare.ts` destructure only
+`{ data }` / `{ data, count }` and ignore the Supabase `error`. When the project is
+unreachable they return `[]` / `0`, so the UI looks like an empty-but-working DB.
+Write methods now surface errors (throw), so a write is the honest probe.
+
+- `error code: 1016` from a Supabase call = Cloudflare cannot reach the Supabase
+  ORIGIN. It is NOT an RLS error (RLS = Postgres 42501 "violates row-level security").
+  1016 almost always means the Supabase project is **paused** (free tier pauses after
+  inactivity) or the URL is wrong.
+- Quick probe without leaking secrets: `curl -o /dev/null -w "%{http_code}"
+  "$SUPABASE_URL/rest/v1/..."`. `000` + curl exit 6 = hostname does not resolve
+  (deleted/old/typo URL); exit 28/timeout or HTTP 1016/52x = project paused.
+- The fix is operational, not code: resume the project in the Supabase dashboard and/or
+  correct `SUPABASE_URL` + `SUPABASE_ANON_KEY`. Cloudflare secrets and Replit secrets are
+  independent — updating one does not update the other.

@@ -107,7 +107,7 @@ export class CloudflareStorage implements IStorage {
   }
 
   async createPromoCode(promoCode: InsertPromoCode): Promise<PromoCode> {
-    const { data: created } = await this.supabase
+    const { data: created, error } = await this.supabase
       .from('promo_codes')
       .insert({
         code: promoCode.code,
@@ -118,6 +118,14 @@ export class CloudflareStorage implements IStorage {
       })
       .select()
       .single();
+    
+    // Surface write failures instead of silently returning null. A blocked
+    // insert (e.g. RLS policy missing on the database) would otherwise look
+    // like a success but store nothing.
+    if (error) {
+      console.error('createPromoCode failed:', error);
+      throw new Error(`Failed to create promo code: ${error.message}`);
+    }
     
     // Convert snake_case to camelCase for frontend compatibility
     return this.mapPromoCodeFromDb(created);
@@ -132,15 +140,21 @@ export class CloudflareStorage implements IStorage {
       status: 'unused'
     }));
     
-    const { data: created } = await this.supabase
+    const { data: created, error } = await this.supabase
       .from('promo_codes')
       .insert(insertData)
       .select();
+    
+    if (error) {
+      console.error('createBulkPromoCodes failed:', error);
+      throw new Error(`Failed to create promo codes: ${error.message}`);
+    }
+    
     return (created || []).map((code: any) => this.mapPromoCodeFromDb(code));
   }
 
   async markPromoCodeAsUsed(code: string): Promise<PromoCode | undefined> {
-    const { data: updated } = await this.supabase
+    const { data: updated, error } = await this.supabase
       .from('promo_codes')
       .update({ 
         status: 'used', 
@@ -149,11 +163,17 @@ export class CloudflareStorage implements IStorage {
       .eq('code', code)
       .select()
       .single();
+    // PGRST116 = no row matched (genuine "not found"); anything else is a real
+    // failure (e.g. unreachable DB) and must not be reported as a missing code.
+    if (error && error.code !== 'PGRST116') {
+      console.error('markPromoCodeAsUsed failed:', error);
+      throw new Error(`Failed to update promo code: ${error.message}`);
+    }
     return updated ? this.mapPromoCodeFromDb(updated) : undefined;
   }
 
   async togglePromoCodeStatus(code: string, newStatus: "unused" | "used"): Promise<PromoCode | undefined> {
-    const { data: updated } = await this.supabase
+    const { data: updated, error } = await this.supabase
       .from('promo_codes')
       .update({ 
         status: newStatus,
@@ -162,6 +182,10 @@ export class CloudflareStorage implements IStorage {
       .eq('code', code)
       .select()
       .single();
+    if (error && error.code !== 'PGRST116') {
+      console.error('togglePromoCodeStatus failed:', error);
+      throw new Error(`Failed to update promo code: ${error.message}`);
+    }
     return updated ? this.mapPromoCodeFromDb(updated) : undefined;
   }
 
@@ -170,24 +194,36 @@ export class CloudflareStorage implements IStorage {
       .from('promo_codes')
       .delete()
       .eq('code', code);
-    return !error;
+    if (error) {
+      console.error('deletePromoCode failed:', error);
+      throw new Error(`Failed to delete promo code: ${error.message}`);
+    }
+    return true;
   }
 
   async deleteBulkPromoCodes(codes: string[]): Promise<number> {
-    const { data: deletedCodes } = await this.supabase
+    const { data: deletedCodes, error } = await this.supabase
       .from('promo_codes')
       .delete()
       .in('code', codes)
       .select('id');
+    if (error) {
+      console.error('deleteBulkPromoCodes failed:', error);
+      throw new Error(`Failed to delete promo codes: ${error.message}`);
+    }
     return deletedCodes?.length || 0;
   }
 
   async deleteAllPromoCodes(): Promise<number> {
-    const { data: deletedCodes } = await this.supabase
+    const { data: deletedCodes, error } = await this.supabase
       .from('promo_codes')
       .delete()
       .neq('id', 'non-existent-id')
       .select('id');
+    if (error) {
+      console.error('deleteAllPromoCodes failed:', error);
+      throw new Error(`Failed to delete promo codes: ${error.message}`);
+    }
     return deletedCodes?.length || 0;
   }
 
@@ -465,10 +501,14 @@ export class CloudflareStorage implements IStorage {
   }
 
   async updateTokenLastUsed(token: string): Promise<void> {
-    await this.supabase
+    const { error } = await this.supabase
       .from('api_tokens')
       .update({ last_used_at: new Date().toISOString() })
       .eq('token', token);
+    // Best-effort bookkeeping: log but don't throw so it never breaks auth.
+    if (error) {
+      console.error('updateTokenLastUsed failed:', error);
+    }
   }
 }
 
