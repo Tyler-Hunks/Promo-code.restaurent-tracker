@@ -12,6 +12,8 @@ import { useToast } from "@/hooks/use-toast";
 import { Copy, Ticket, Plus, Layers, Search, Trash2, AlertTriangle, Download, Upload, Settings, Filter } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Separator } from "@/components/ui/separator";
 import type { PromoCode, BulkGenerate, CampaignGenerate } from "@shared/schema";
 import TokenManager from "@/components/TokenManager";
 
@@ -34,8 +36,7 @@ export default function Home() {
   const [codeToDelete, setCodeToDelete] = useState<string | null>(null);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
-  const [showTokenManager, setShowTokenManager] = useState(false);
-  const [showAdvancedTools, setShowAdvancedTools] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [isAdvancedDeleteOpen, setIsAdvancedDeleteOpen] = useState(false);
   const [deleteFilterCampaign, setDeleteFilterCampaign] = useState("");
   const [deleteFilterStatus, setDeleteFilterStatus] = useState("");
@@ -46,29 +47,22 @@ export default function Home() {
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(100);
-  const [usePagination, setUsePagination] = useState(true);
-
-  // Fetch promo codes (with optional pagination)
-  const { data: codesResponse, isLoading: isLoadingCodes, error: codesError } = useQuery<PromoCode[] | { data: PromoCode[]; total: number; page: number; totalPages: number }>({
-    queryKey: usePagination ? ["/api/promo-codes", currentPage, itemsPerPage, searchTerm, selectedCampaign, statusFilter, discountFilter] : ["/api/promo-codes"],
+  // Fetch promo codes (always paginated)
+  const { data: codesResponse, isLoading: isLoadingCodes, error: codesError } = useQuery<{ data: PromoCode[]; total: number; page: number; totalPages: number }>({
+    queryKey: ["/api/promo-codes", currentPage, itemsPerPage, searchTerm, selectedCampaign, statusFilter, discountFilter],
     queryFn: async () => {
-      if (usePagination) {
-        const params = new URLSearchParams({
-          page: currentPage.toString(),
-          limit: itemsPerPage.toString()
-        });
-        
-        if (searchTerm) params.append('search', searchTerm);
-        if (selectedCampaign !== 'all') params.append('campaign', selectedCampaign);
-        if (statusFilter !== 'all') params.append('status', statusFilter);
-        if (discountFilter) params.append('discount', discountFilter);
-        
-        const response = await apiRequest("GET", `/api/promo-codes?${params.toString()}`);
-        return response.json();
-      } else {
-        const response = await apiRequest("GET", "/api/promo-codes");
-        return response.json();
-      }
+      const params = new URLSearchParams({
+        page: currentPage.toString(),
+        limit: itemsPerPage.toString()
+      });
+
+      if (searchTerm) params.append('search', searchTerm);
+      if (selectedCampaign !== 'all') params.append('campaign', selectedCampaign);
+      if (statusFilter !== 'all') params.append('status', statusFilter);
+      if (discountFilter) params.append('discount', discountFilter);
+
+      const response = await apiRequest("GET", `/api/promo-codes?${params.toString()}`);
+      return response.json();
     }
   });
 
@@ -674,11 +668,11 @@ export default function Home() {
             <div className="flex items-center space-x-4">
               <Button
                 variant="outline"
-                onClick={() => setShowTokenManager(!showTokenManager)}
-                data-testid="button-toggle-tokens"
+                onClick={() => setSettingsOpen(true)}
+                data-testid="button-open-settings"
               >
                 <Settings className="h-4 w-4 mr-2" />
-                {showTokenManager ? 'Hide Tokens' : 'API Tokens'}
+                Settings
               </Button>
               {/* Generate Code Button with Dropdown */}
               <div className="flex items-center space-x-2">
@@ -877,55 +871,26 @@ export default function Home() {
         </div>
       </header>
 
-      {/* Token Manager Section */}
-      {showTokenManager && (
-        <div className="bg-white border-b">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-            <TokenManager />
-          </div>
-        </div>
-      )}
+      {/* Settings Sidebar */}
+      <Sheet open={settingsOpen} onOpenChange={setSettingsOpen}>
+        <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle className="flex items-center">
+              <Settings className="mr-2 h-5 w-5" />
+              Settings
+            </SheetTitle>
+            <SheetDescription>
+              Data tools and API token management for advanced users.
+            </SheetDescription>
+          </SheetHeader>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Advanced Tools Section */}
-        <div className="mb-8">
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle className="flex items-center">
-                  <Settings className="mr-2 h-5 w-5" />
-                  Advanced Tools
-                </CardTitle>
-                <Checkbox
-                  id="show-advanced"
-                  checked={showAdvancedTools}
-                  onCheckedChange={(checked) => setShowAdvancedTools(!!checked)}
-                  className="mr-2"
-                />
-                <Label htmlFor="show-advanced" className="text-sm cursor-pointer">
-                  {showAdvancedTools ? 'Hide' : 'Show'} Tools
-                </Label>
-              </div>
-            </CardHeader>
-            {showAdvancedTools && (
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                  {/* Pagination Toggle */}
-                  <div className="flex items-center space-x-2 p-3 bg-blue-50 rounded-lg">
-                    <Checkbox
-                      id="pagination-toggle"
-                      checked={usePagination}
-                      onCheckedChange={(checked) => {
-                        setUsePagination(!!checked);
-                        setCurrentPage(1);
-                      }}
-                      data-testid="checkbox-pagination"
-                    />
-                    <Label htmlFor="pagination-toggle" className="text-sm">
-                      Use Pagination ({totalRecords > 1000 ? 'Recommended' : 'Optional'})
-                    </Label>
-                  </div>
-                  
+          <div className="mt-6 space-y-6">
+            <div className="space-y-4">
+              <h3 className="text-sm font-semibold text-gray-900 flex items-center">
+                <Filter className="mr-2 h-4 w-4" />
+                Data Tools
+              </h3>
+              
                   {/* CSV Downloads */}
                   <div className="space-y-2 p-3 bg-green-50 rounded-lg">
                     <h4 className="text-sm font-medium text-green-800">Export Data</h4>
@@ -1235,13 +1200,23 @@ export default function Home() {
                       </AlertDialog>
                     </div>
                   )}
-                </div>
-              </CardContent>
-            )}
-          </Card>
-        </div>
-        
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            </div>
+
+            <Separator />
+
+            <div className="space-y-4">
+              <h3 className="text-sm font-semibold text-gray-900 flex items-center">
+                <Settings className="mr-2 h-4 w-4" />
+                API Tokens
+              </h3>
+              <TokenManager />
+            </div>
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
           {/* Redeem Code Section */}
           <div className="lg:col-span-1">
             <Card>
@@ -1314,8 +1289,8 @@ export default function Home() {
           </div>
 
           {/* Code Tracker */}
-          <div className="lg:col-span-2">
-            <Card>
+          <div className="lg:col-span-3">
+            <Card className="overflow-hidden">
               <CardHeader>
                 <div className="flex flex-col gap-4">
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -1449,8 +1424,8 @@ export default function Home() {
 
               {/* Codes Table */}
               <CardContent className="p-0">
-                <div>
-                  <table className="w-full">
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[760px]">
                     <thead className="bg-gray-50 border-b border-gray-200">
                       <tr>
                         <th className="px-4 py-3 text-left">
@@ -1598,59 +1573,51 @@ export default function Home() {
                 {/* Pagination Controls */}
                 {codes.length > 0 && (
                   <div className="bg-gray-50 px-6 py-3 border-t border-gray-200">
-                    {usePagination ? (
-                      <div className="flex items-center justify-between">
-                        <div className="text-sm text-gray-600">
-                          Showing {(currentPage - 1) * itemsPerPage + 1} to {Math.min(currentPage * itemsPerPage, totalRecords)} of {totalRecords} codes
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                            disabled={currentPage <= 1}
-                            data-testid="button-prev-page"
-                          >
-                            Previous
-                          </Button>
-                          <span className="text-sm text-gray-600">
-                            Page {currentPage} of {totalPages}
-                          </span>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
-                            disabled={currentPage >= totalPages}
-                            data-testid="button-next-page"
-                          >
-                            Next
-                          </Button>
-                          <Select 
-                            value={itemsPerPage.toString()} 
-                            onValueChange={(value) => {
-                              setItemsPerPage(Number(value));
-                              setCurrentPage(1);
-                            }}
-                          >
-                            <SelectTrigger className="w-20">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="50">50</SelectItem>
-                              <SelectItem value="100">100</SelectItem>
-                              <SelectItem value="200">200</SelectItem>
-                              <SelectItem value="500">500</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </div>
-                    ) : (
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                       <div className="text-sm text-gray-600">
-                        Showing all {codes.length} codes {totalRecords > 1000 && (
-                          <span className="text-amber-600 font-medium">(Consider enabling pagination for better performance)</span>
-                        )}
+                        Showing {(currentPage - 1) * itemsPerPage + 1} to {Math.min(currentPage * itemsPerPage, totalRecords)} of {totalRecords} codes
                       </div>
-                    )}
+                      <div className="flex items-center space-x-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                          disabled={currentPage <= 1}
+                          data-testid="button-prev-page"
+                        >
+                          Previous
+                        </Button>
+                        <span className="text-sm text-gray-600">
+                          Page {currentPage} of {totalPages}
+                        </span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                          disabled={currentPage >= totalPages}
+                          data-testid="button-next-page"
+                        >
+                          Next
+                        </Button>
+                        <Select 
+                          value={itemsPerPage.toString()} 
+                          onValueChange={(value) => {
+                            setItemsPerPage(Number(value));
+                            setCurrentPage(1);
+                          }}
+                        >
+                          <SelectTrigger className="w-20">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="50">50</SelectItem>
+                            <SelectItem value="100">100</SelectItem>
+                            <SelectItem value="200">200</SelectItem>
+                            <SelectItem value="500">500</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
                   </div>
                 )}
               </CardContent>

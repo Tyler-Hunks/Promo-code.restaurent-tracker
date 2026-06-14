@@ -180,20 +180,20 @@ export default function TokenManager() {
                 className="flex items-center justify-between p-4 border rounded-lg"
                 data-testid={`token-${token.id}`}
               >
-                <div className="flex-1">
+                <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-3 mb-2">
                     <h4 className="font-medium">{token.name}</h4>
                     <Badge variant="secondary">Permanent</Badge>
                   </div>
                   <div className="text-sm text-muted-foreground space-y-1">
-                    <div className="flex items-center gap-4">
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
                       <span>Created: {formatDate(token.createdAt)}</span>
                       <span className="flex items-center gap-1">
                         <Clock className="h-3 w-3" />
                         Last used: {formatDate(token.lastUsedAt)}
                       </span>
                     </div>
-                    <div className="font-mono text-xs bg-muted p-2 rounded border">
+                    <div className="font-mono text-xs bg-muted p-2 rounded border break-all">
                       {token.token}
                     </div>
                   </div>
