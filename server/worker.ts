@@ -64,9 +64,6 @@ function generateSecureToken(): string {
   return token;
 }
 
-// Store active tokens (in production, use KV storage)
-const activeTokens = new Set<string>();
-
 // Create a stateless token with timestamp and signature (for temporary tokens)
 async function createStatelessToken(apiKey: string): Promise<string> {
   const timestamp = Date.now();
@@ -111,8 +108,8 @@ async function verifyStatelessToken(token: string, expectedApiKey: string): Prom
     const timestamp = parseInt(timestampStr);
     const now = Date.now();
     
-    // Token expires after 24 hours
-    if (now - timestamp > 24 * 60 * 60 * 1000) return false;
+    // Token expires after 30 days
+    if (now - timestamp > 30 * 24 * 60 * 60 * 1000) return false;
     
     const payload = `${timestamp}.${expectedApiKey}`;
     const secret = expectedApiKey; // Use the API key itself as secret for workers
@@ -161,17 +158,20 @@ async function requireAuth(request: Request, env: Env) {
   
   const token = authHeader.substring(7); // Remove 'Bearer ' prefix
   
-  // Check if it's a temporary session token (both in-memory and stateless)
-  if (activeTokens.has(token)) {
-    return null;
-  }
-  
-  // Check if it's a stateless temporary token
+  // Temporary session tokens are stateless: always enforce expiry via the signed
+  // timestamp instead of trusting in-memory state (which would let a token outlive
+  // its expiry window for as long as the isolate stays alive).
   if (token.startsWith('temp.')) {
     const apiKey = env.API_KEY;
     if (apiKey && await verifyStatelessToken(token, apiKey)) {
       return null;
     }
+    return new Response(JSON.stringify({ 
+      message: 'Unauthorized: Invalid token'
+    }), {
+      status: 401,
+      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+    });
   }
   
   // Check if it's a permanent API token
@@ -258,10 +258,8 @@ async function handleAPI(request: Request, env: Env): Promise<Response> {
       
       // Generate stateless token
       const token = await createStatelessToken(body.apiKey);
-      // Still add to activeTokens for backward compatibility during this session
-      activeTokens.add(token);
-      
-      return new Response(JSON.stringify({ token, expiresIn: 86400 }), {
+
+      return new Response(JSON.stringify({ token, expiresIn: 30 * 24 * 60 * 60 }), {
         status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });

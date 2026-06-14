@@ -1218,7 +1218,7 @@ export default function Home() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
           {/* Redeem Code Section */}
-          <div className="lg:col-span-1">
+          <div className="lg:col-span-1 lg:sticky lg:top-6 lg:self-start">
             <Card>
               <CardHeader>
                 <CardTitle>Redeem Code</CardTitle>

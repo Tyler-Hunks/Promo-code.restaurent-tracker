@@ -15,9 +15,6 @@ function generateSecureToken(): string {
   return token;
 }
 
-// Store active tokens (in production, use KV storage)
-const activeTokens = new Set<string>();
-
 // Create a stateless token with timestamp and signature (for temporary tokens)
 function createStatelessToken(apiKey: string): string {
   const timestamp = Date.now();
@@ -41,8 +38,8 @@ function verifyStatelessToken(token: string, expectedApiKey: string): boolean {
     const timestamp = parseInt(timestampStr);
     const now = Date.now();
     
-    // Token expires after 24 hours
-    if (now - timestamp > 24 * 60 * 60 * 1000) return false;
+    // Token expires after 30 days
+    if (now - timestamp > 30 * 24 * 60 * 60 * 1000) return false;
     
     const payload = `${timestamp}.${expectedApiKey}`;
     const secret = process.env.API_KEY || 'temp-fallback';
@@ -68,17 +65,17 @@ async function requireAuth(req: Request, res: Response, next: NextFunction) {
   
   const token = authHeader.substring(7); // Remove 'Bearer ' prefix
   
-  // Check if it's a temporary session token (both in-memory and stateless)
-  if (activeTokens.has(token)) {
-    return next();
-  }
-  
-  // Check if it's a stateless temporary token
+  // Temporary session tokens are stateless: always enforce expiry via the signed
+  // timestamp instead of trusting in-memory state (which would let a token outlive
+  // its expiry window for as long as the server process stays alive).
   if (token.startsWith('temp.')) {
     const apiKey = process.env.API_KEY;
     if (apiKey && verifyStatelessToken(token, apiKey)) {
       return next();
     }
+    return res.status(401).json({ 
+      message: 'Unauthorized: Invalid token'
+    });
   }
   
   // Check if it's a permanent API token
@@ -140,10 +137,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Generate stateless token instead of storing in memory
       const token = createStatelessToken(apiKey);
-      // Still add to activeTokens for backward compatibility during this session
-      activeTokens.add(token);
-      
-      res.json({ token, expiresIn: 86400 });
+
+      res.json({ token, expiresIn: 30 * 24 * 60 * 60 });
     } catch (error) {
       res.status(400).json({ message: 'Invalid request' });
     }

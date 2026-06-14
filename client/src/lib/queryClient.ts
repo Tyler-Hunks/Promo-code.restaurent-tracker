@@ -18,6 +18,16 @@ export function removeStoredToken(): void {
   localStorage.removeItem(TOKEN_KEY);
 }
 
+// Called when the server rejects our token (e.g. it expired while the app sat idle).
+// Clears the stored token and notifies the app so it can return to the login screen.
+export function handleUnauthorized(): void {
+  if (typeof window === 'undefined') return;
+  // If there's no token, we've already handled this (dedupes a burst of 401s).
+  if (!getStoredToken()) return;
+  removeStoredToken();
+  window.dispatchEvent(new CustomEvent('auth:unauthorized'));
+}
+
 export async function loginWithApiKey(apiKey: string): Promise<{ token: string; expiresIn: number }> {
   const baseUrl = import.meta.env.VITE_API_BASE_URL || 
     (typeof window !== 'undefined' ? window.location.origin : '');
@@ -77,6 +87,10 @@ export async function apiRequest(
     credentials: "include",
   });
 
+  if (res.status === 401) {
+    handleUnauthorized();
+  }
+
   await throwIfResNotOk(res);
   return res;
 }
@@ -104,8 +118,11 @@ export const getQueryFn: <T>(options: {
       credentials: "include",
     });
 
-    if (unauthorizedBehavior === "returnNull" && res.status === 401) {
-      return null;
+    if (res.status === 401) {
+      handleUnauthorized();
+      if (unauthorizedBehavior === "returnNull") {
+        return null;
+      }
     }
 
     await throwIfResNotOk(res);

@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import NotFound from "@/pages/not-found";
 import Home from "@/pages/home";
 import Login from "@/components/Login";
+import { useToast } from "@/hooks/use-toast";
 import { LogOut } from "lucide-react";
 
 function Router() {
@@ -21,6 +22,7 @@ function Router() {
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const { toast } = useToast();
   
   useEffect(() => {
     // Clear any old invalid tokens and check for valid token
@@ -33,6 +35,21 @@ function App() {
       setIsAuthenticated(!!token);
     }
   }, []);
+
+  useEffect(() => {
+    // When the server rejects our token (e.g. it expired after the app sat idle),
+    // automatically return to the login screen instead of showing a broken page.
+    const onUnauthorized = () => {
+      setIsAuthenticated(false);
+      queryClient.clear();
+      toast({
+        title: 'Session expired',
+        description: 'Please sign in again to continue.',
+      });
+    };
+    window.addEventListener('auth:unauthorized', onUnauthorized);
+    return () => window.removeEventListener('auth:unauthorized', onUnauthorized);
+  }, [toast]);
   
   const handleLogin = () => {
     // Check token again after login
