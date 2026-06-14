@@ -3,6 +3,16 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <script>
+      // Apply the saved theme before React mounts to avoid a flash of the wrong theme.
+      try {
+        if (localStorage.getItem('promo-theme') === 'restaurant') {
+          document.documentElement.classList.add('theme-restaurant');
+        }
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

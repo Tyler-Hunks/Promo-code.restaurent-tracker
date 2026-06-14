@@ -657,7 +657,7 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center space-x-3">
-              <div className="bg-primary text-white p-2 rounded-lg">
+              <div className="bg-primary text-primary-foreground p-2 rounded-lg">
                 <Ticket className="text-xl" />
               </div>
               <div>
@@ -857,7 +857,7 @@ export default function Home() {
                       <Button
                         onClick={() => generateCampaignMutation.mutate()}
                         disabled={!campaignName || !discountValue || generateCampaignMutation.isPending}
-                        className="w-full bg-secondary hover:bg-green-700"
+                        className="w-full bg-secondary text-secondary-foreground hover:bg-green-700"
                       >
                         <Layers className="mr-2 h-4 w-4" />
                         Create Campaign ({bulkCount} codes)

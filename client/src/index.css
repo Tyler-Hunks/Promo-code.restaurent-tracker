@@ -1,4 +1,5 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap');
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -97,6 +98,62 @@
   --shadow-lg: 0px 2px 0px 0px hsl(207 90% 54% / 0.00), 0px 4px 6px -1px hsl(207 90% 54% / 0.00);
   --shadow-xl: 0px 2px 0px 0px hsl(207 90% 54% / 0.00), 0px 8px 10px -1px hsl(207 90% 54% / 0.00);
   --shadow-2xl: 0px 2px 0px 0px hsl(207 90% 54% / 0.00);
+}
+
+/* ===== Restaurant theme: warm ivory + gold (toggled via .theme-restaurant on <html>) ===== */
+:root.theme-restaurant {
+  --background: hsl(40 33% 95%);
+  --foreground: hsl(210 25% 8%);
+  --card: hsl(0 0% 100%);
+  --card-foreground: hsl(210 25% 8%);
+  --popover: hsl(0 0% 100%);
+  --popover-foreground: hsl(210 25% 8%);
+  --primary: hsl(38 88% 77%);
+  --primary-foreground: hsl(210 25% 8%);
+  --secondary: hsl(210 24% 15%);
+  --secondary-foreground: hsl(40 33% 96%);
+  --accent: hsl(38 62% 90%);
+  --accent-foreground: hsl(210 25% 8%);
+  --muted: hsl(40 24% 91%);
+  --muted-foreground: hsl(0 0% 40%);
+  --destructive: hsl(356 70% 48%);
+  --destructive-foreground: hsl(0 0% 100%);
+  --border: hsl(40 22% 84%);
+  --input: hsl(40 26% 92%);
+  --ring: hsl(38 72% 55%);
+  --chart-1: hsl(38 78% 62%);
+  --chart-2: hsl(210 24% 18%);
+  --chart-3: hsl(0 0% 45%);
+  --chart-4: hsl(38 58% 74%);
+  --chart-5: hsl(20 55% 50%);
+  --sidebar: hsl(0 0% 100%);
+  --sidebar-foreground: hsl(210 25% 8%);
+  --sidebar-primary: hsl(38 88% 77%);
+  --sidebar-primary-foreground: hsl(210 25% 8%);
+  --sidebar-accent: hsl(38 62% 90%);
+  --sidebar-accent-foreground: hsl(210 25% 8%);
+  --sidebar-border: hsl(40 22% 84%);
+  --sidebar-ring: hsl(38 72% 55%);
+  --font-sans: 'Montserrat', 'Helvetica Neue', Arial, sans-serif;
+  --font-serif: Georgia, Times, 'Times New Roman', serif;
+}
+
+/* Re-skin only the hardcoded structural utilities, scoped to the restaurant
+   theme so the default theme stays exactly as-is. Status colors (green/red/
+   orange/blue) keep their meaning on purpose. */
+:root.theme-restaurant .bg-gray-50 { background-color: hsl(40 33% 95%); }
+:root.theme-restaurant .hover\:bg-gray-50:hover { background-color: hsl(38 46% 92%); }
+:root.theme-restaurant .hover\:bg-blue-700:hover { background-color: hsl(38 70% 60%); }
+
+/* Warm, on-brand login backdrop in the restaurant theme */
+:root.theme-restaurant .login-bg {
+  background-image: linear-gradient(to bottom right, hsl(40 44% 96%), hsl(38 66% 84%));
+}
+
+/* Subtle gold accent under the top bar in the restaurant theme */
+:root.theme-restaurant .app-header {
+  border-bottom-color: hsl(38 72% 68%);
+  box-shadow: 0 1px 0 0 hsl(38 72% 78% / 0.6);
 }
 
 @layer base {

@@ -9,7 +9,16 @@ import NotFound from "@/pages/not-found";
 import Home from "@/pages/home";
 import Login from "@/components/Login";
 import { useToast } from "@/hooks/use-toast";
-import { LogOut } from "lucide-react";
+import { useTheme, type Theme } from "@/hooks/use-theme";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { LogOut, Palette, Check } from "lucide-react";
 
 function Router() {
   return (
@@ -17,6 +26,40 @@ function Router() {
       <Route path="/" component={Home} />
       <Route component={NotFound} />
     </Switch>
+  );
+}
+
+function ThemeToggle() {
+  const { theme, setTheme } = useTheme();
+  const options: { value: Theme; label: string }[] = [
+    { value: "default", label: "Default (Blue)" },
+    { value: "restaurant", label: "Restaurant (Gold)" },
+  ];
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="outline" size="sm" data-testid="button-theme">
+          <Palette className="h-4 w-4 mr-2" />
+          Theme
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuLabel>Appearance</DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        {options.map((opt) => (
+          <DropdownMenuItem
+            key={opt.value}
+            onClick={() => setTheme(opt.value)}
+            data-testid={`theme-option-${opt.value}`}
+          >
+            <Check
+              className={`h-4 w-4 mr-2 ${theme === opt.value ? "opacity-100" : "opacity-0"}`}
+            />
+            {opt.label}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -81,18 +124,21 @@ function App() {
       <TooltipProvider>
         <Toaster />
         <div className="min-h-screen bg-background">
-          <header className="border-b">
+          <header className="border-b app-header">
             <div className="container mx-auto px-4 py-3 flex justify-between items-center">
               <h1 className="text-xl font-semibold">Promo Code Manager</h1>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={handleLogout}
-                data-testid="button-logout"
-              >
-                <LogOut className="h-4 w-4 mr-2" />
-                Sign Out
-              </Button>
+              <div className="flex items-center gap-2">
+                <ThemeToggle />
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={handleLogout}
+                  data-testid="button-logout"
+                >
+                  <LogOut className="h-4 w-4 mr-2" />
+                  Sign Out
+                </Button>
+              </div>
             </div>
           </header>
           <main>
