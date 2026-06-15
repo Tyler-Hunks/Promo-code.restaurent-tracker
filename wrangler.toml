@@ -4,6 +4,11 @@ main = "dist/worker.js"
 compatibility_date = "2024-09-19"
 compatibility_flags = ["nodejs_compat"]
 
+# Custom domain (keeps blueempiregroup.co.uk attached to this Worker on deploy)
+routes = [
+  { pattern = "blueempiregroup.co.uk", custom_domain = true }
+]
+
 # Static assets (React build files)
 [assets]
 directory = "./dist/public"
