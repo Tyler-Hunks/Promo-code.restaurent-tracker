@@ -21,6 +21,11 @@ The primary page renders its own page background, header, panels, table, and sta
 
 **How to apply:** make a theme's `--secondary` a single dark color (works as text-on-white and as bg-with-light-text), and ensure any `bg-secondary` element also carries `text-secondary-foreground` (default-safe, since default `--secondary-foreground` is white = same as its `--primary-foreground`).
 
+## Gotcha 3 — custom-bg `<Button>`s inherit `text-primary-foreground`
+shadcn `Button variant="default"` sets `text-primary-foreground`. The main page has several buttons that override only the background (`bg-red-600`, `bg-accent`, `bg-yellow-600`, `bg-secondary`) and leave the text color inherited. In the **default** theme `--primary-foreground` is white, so they look fine — but any theme that makes `--primary-foreground` dark (e.g. a gold-primary restaurant theme) flips them to dark-text-on-colored-bg (navy-on-red, dark-on-dark-brown).
+
+**How to apply:** give each custom-bg button an explicit, theme-correct text class so it never relies on the inherited token: `bg-red-600 → text-white`, `bg-accent → text-accent-foreground` (each theme pairs accent-foreground with accent), `bg-secondary → text-secondary-foreground`. These are all default-safe because the default theme's matching `*-foreground` equals the white it already showed. `bg-yellow-600` (amber) reads acceptably with either light or dark inherited text, so it can be left. **Why:** you can't visually QA the authenticated page in dev (login needs an API_KEY secret absent from the env), so reason about contrast per-theme from the token values instead of eyeballing.
+
 ## Other notes
 - Tokens store full color functions (`hsl(...)`), and Tailwind maps colors as `var(--x)` directly — so `/opacity` modifiers on these tokens don't behave like normal Tailwind palette colors.
 - Avoid FOUC by setting the saved theme class in an inline `<head>` script before React mounts; the provider then keeps the class in sync with its stored preference (an effect will *remove* a class the inline script added if the stored value disagrees).

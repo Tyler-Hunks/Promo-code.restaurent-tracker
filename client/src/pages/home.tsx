@@ -1150,7 +1150,7 @@ export default function Home() {
                                     setDeleteConfirmText(""); // Clear after mutation
                                   }}
                                   disabled={deleteConfirmText !== "DELETE" || deleteByFiltersMutation.isPending}
-                                  className="bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                                  className="bg-red-600 hover:bg-red-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
                                   data-testid="button-final-confirm-delete"
                                 >
                                   {deleteByFiltersMutation.isPending ? "Deleting..." : "Yes, Delete Codes"}
@@ -1191,7 +1191,7 @@ export default function Home() {
                             <AlertDialogCancel>Cancel</AlertDialogCancel>
                             <AlertDialogAction 
                               onClick={() => deleteAllCodesMutation.mutate()}
-                              className="bg-red-600 hover:bg-red-700"
+                              className="bg-red-600 hover:bg-red-700 text-white"
                             >
                               Delete All {stats.total} Codes
                             </AlertDialogAction>
@@ -1243,7 +1243,7 @@ export default function Home() {
                       setRedeemCode("");
                     }}
                     disabled={!redeemCode || redeemMutation.isPending}
-                    className="w-full bg-accent hover:bg-orange-600"
+                    className="w-full bg-accent hover:bg-orange-600 text-accent-foreground"
                   >
                     <Ticket className="mr-2 h-4 w-4" />
                     Redeem Code
@@ -1397,7 +1397,7 @@ export default function Home() {
                           variant="destructive"
                           size="sm"
                           disabled={deleteBulkMutation.isPending}
-                          className="bg-red-600 hover:bg-red-700"
+                          className="bg-red-600 hover:bg-red-700 text-white"
                         >
                           <Trash2 className="mr-2 h-4 w-4" />
                           Delete Selected ({selectedCodes.length})
@@ -1644,7 +1644,7 @@ export default function Home() {
             </AlertDialogCancel>
             <AlertDialogAction 
               onClick={confirmDeleteCode}
-              className="bg-red-600 hover:bg-red-700"
+              className="bg-red-600 hover:bg-red-700 text-white"
             >
               Delete Code
             </AlertDialogAction>

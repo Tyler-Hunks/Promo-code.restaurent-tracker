@@ -1,8 +1,14 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 
-export type Theme = "default" | "restaurant";
+export type Theme = "default" | "restaurant" | "restaurant-dark";
 
 const STORAGE_KEY = "promo-theme";
+
+const THEME_CLASSES: Record<Theme, string | null> = {
+  default: null,
+  restaurant: "theme-restaurant",
+  "restaurant-dark": "theme-restaurant-dark",
+};
 
 interface ThemeContextValue {
   theme: Theme;
@@ -11,12 +17,16 @@ interface ThemeContextValue {
 
 const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
 
+function isTheme(value: unknown): value is Theme {
+  return value === "default" || value === "restaurant" || value === "restaurant-dark";
+}
+
 function applyThemeClass(theme: Theme) {
   const root = document.documentElement;
-  if (theme === "restaurant") {
-    root.classList.add("theme-restaurant");
-  } else {
-    root.classList.remove("theme-restaurant");
+  root.classList.remove("theme-restaurant", "theme-restaurant-dark");
+  const cls = THEME_CLASSES[theme];
+  if (cls) {
+    root.classList.add(cls);
   }
 }
 
@@ -24,9 +34,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<Theme>(() => {
     if (typeof window === "undefined") return "default";
     try {
-      return window.localStorage.getItem(STORAGE_KEY) === "restaurant"
-        ? "restaurant"
-        : "default";
+      const stored = window.localStorage.getItem(STORAGE_KEY);
+      return isTheme(stored) ? stored : "default";
     } catch {
       return "default";
     }

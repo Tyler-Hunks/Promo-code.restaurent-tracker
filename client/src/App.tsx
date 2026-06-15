@@ -33,7 +33,8 @@ function ThemeToggle() {
   const { theme, setTheme } = useTheme();
   const options: { value: Theme; label: string }[] = [
     { value: "default", label: "Default (Blue)" },
-    { value: "restaurant", label: "Restaurant (Gold)" },
+    { value: "restaurant", label: "Restaurant Light (Gold)" },
+    { value: "restaurant-dark", label: "Restaurant Dark (Gold)" },
   ];
   return (
     <DropdownMenu>
