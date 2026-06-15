@@ -9,6 +9,10 @@ routes = [
   { pattern = "blueempiregroup.co.uk", custom_domain = true }
 ]
 
+# Keep the free *.workers.dev URL and preview URLs on (defining routes would otherwise turn these off)
+workers_dev = true
+preview_urls = true
+
 # Static assets (React build files)
 [assets]
 directory = "./dist/public"
