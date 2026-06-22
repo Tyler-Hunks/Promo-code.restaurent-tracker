@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "uf_YlGRj9APjmAiAiqPYk"
+uri = "file://MANUAL.md"
+type = "text"
+title = "Promo Code Manager — User Manual"
