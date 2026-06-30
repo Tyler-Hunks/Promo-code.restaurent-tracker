@@ -118,13 +118,15 @@ $$ LANGUAGE plpgsql;
 -- ========================================
 -- These are SEPARATE from the promo-code "campaigns" (which live on
 -- promo_codes.campaign_name). Required for the Campaigns tab to work.
+-- A campaign points at ONE Google Sheet document (document_id) and an ARRAY of
+-- tab gids (sheet_ids, at least 2). The older document_id_2 / campaign_info_gid
+-- columns are gone.
 CREATE TABLE IF NOT EXISTS email_campaigns (
     id VARCHAR PRIMARY KEY DEFAULT uuid_generate_v4()::VARCHAR,
     campaign_name TEXT NOT NULL,
     campaign_type TEXT,
     document_id TEXT NOT NULL,
-    document_id_2 TEXT,
-    campaign_info_gid TEXT NOT NULL,
+    sheet_ids TEXT[] NOT NULL DEFAULT '{}',
     main_script TEXT,
     follow_ups TEXT[] NOT NULL DEFAULT '{}',
     expiry_date DATE,
@@ -138,26 +140,88 @@ CREATE TABLE IF NOT EXISTS email_campaign_templates (
     id VARCHAR PRIMARY KEY DEFAULT uuid_generate_v4()::VARCHAR,
     name TEXT NOT NULL,
     campaign_type TEXT,
-    document_id TEXT NOT NULL,
-    document_id_2 TEXT,
-    campaign_info_gid TEXT NOT NULL,
+    document_id TEXT,
+    sheet_ids TEXT[] NOT NULL DEFAULT '{}',
     default_main_script TEXT,
     default_follow_ups TEXT[] NOT NULL DEFAULT '{}',
     notes TEXT,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 );
 
+-- Full launch history: one row per launch attempt (success OR failure), so the
+-- Campaigns tab can show every launch and a per-campaign rollup.
+CREATE TABLE IF NOT EXISTS email_campaign_launches (
+    id VARCHAR PRIMARY KEY DEFAULT uuid_generate_v4()::VARCHAR,
+    campaign_id VARCHAR NOT NULL,
+    campaign_name TEXT NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('success', 'failed')),
+    detail TEXT,
+    launched_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+
+-- Reconcile older versions of these tables (safe to run repeatedly).
+-- 1) Add the new array column first.
+ALTER TABLE email_campaigns ADD COLUMN IF NOT EXISTS sheet_ids TEXT[] NOT NULL DEFAULT '{}';
+ALTER TABLE email_campaign_templates ADD COLUMN IF NOT EXISTS sheet_ids TEXT[] NOT NULL DEFAULT '{}';
+
+-- 2) Preserve any old single gid (campaign_info_gid) by copying it into sheet_ids
+--    BEFORE the obsolete columns are dropped, so existing data is never silently
+--    destroyed. Uses dynamic SQL guarded by a column-exists check so it is safe
+--    to run on both old and already-migrated databases. Only fills empty
+--    sheet_ids (won't clobber rows you've already updated). Migrated campaigns
+--    will have 1 gid and must have a 2nd added before they can launch again.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'email_campaigns' AND column_name = 'campaign_info_gid'
+  ) THEN
+    EXECUTE $sql$
+      UPDATE email_campaigns
+      SET sheet_ids = ARRAY[campaign_info_gid]
+      WHERE COALESCE(cardinality(sheet_ids), 0) = 0
+        AND campaign_info_gid IS NOT NULL
+        AND campaign_info_gid <> ''
+    $sql$;
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'email_campaign_templates' AND column_name = 'campaign_info_gid'
+  ) THEN
+    EXECUTE $sql$
+      UPDATE email_campaign_templates
+      SET sheet_ids = ARRAY[campaign_info_gid]
+      WHERE COALESCE(cardinality(sheet_ids), 0) = 0
+        AND campaign_info_gid IS NOT NULL
+        AND campaign_info_gid <> ''
+    $sql$;
+  END IF;
+END $$;
+
+-- 3) Now that any gid data is preserved, drop the obsolete columns.
+ALTER TABLE email_campaigns DROP COLUMN IF EXISTS document_id_2;
+ALTER TABLE email_campaigns DROP COLUMN IF EXISTS campaign_info_gid;
+ALTER TABLE email_campaign_templates DROP COLUMN IF EXISTS document_id_2;
+ALTER TABLE email_campaign_templates DROP COLUMN IF EXISTS campaign_info_gid;
+ALTER TABLE email_campaign_templates ALTER COLUMN document_id DROP NOT NULL;
+
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_email_campaigns_created_at ON email_campaigns(created_at);
 CREATE INDEX IF NOT EXISTS idx_email_campaigns_status ON email_campaigns(status);
 CREATE INDEX IF NOT EXISTS idx_email_campaigns_type ON email_campaigns(campaign_type);
 CREATE INDEX IF NOT EXISTS idx_email_campaign_templates_name ON email_campaign_templates(name);
+CREATE INDEX IF NOT EXISTS idx_email_campaign_launches_launched_at ON email_campaign_launches(launched_at DESC);
+CREATE INDEX IF NOT EXISTS idx_email_campaign_launches_campaign_id ON email_campaign_launches(campaign_id);
 
 -- RLS: access is enforced in the app layer via Bearer tokens. Allow the anon
 -- key (used by the Cloudflare Worker) to read/write, matching the other tables.
 ALTER TABLE email_campaigns ENABLE ROW LEVEL SECURITY;
 ALTER TABLE email_campaign_templates ENABLE ROW LEVEL SECURITY;
+ALTER TABLE email_campaign_launches ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Allow all operations" ON email_campaigns;
 DROP POLICY IF EXISTS "Allow all operations" ON email_campaign_templates;
+DROP POLICY IF EXISTS "Allow all operations" ON email_campaign_launches;
 CREATE POLICY "Allow all operations" ON email_campaigns FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all operations" ON email_campaign_templates FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all operations" ON email_campaign_launches FOR ALL USING (true) WITH CHECK (true);

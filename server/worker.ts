@@ -625,17 +625,44 @@ async function handleAPI(request: Request, env: Env): Promise<Response> {
         });
       }
 
+      // Guard legacy/migrated rows: a campaign must have a Document ID and at
+      // least 2 Sheet IDs before it can launch with a valid payload.
+      if (!campaign.documentId || !campaign.sheetIds || campaign.sheetIds.length < 2) {
+        return new Response(JSON.stringify({
+          message: "This campaign needs a Document ID and at least 2 Sheet IDs before it can launch. Open it, add them, then try again.",
+        }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
       const payload = buildLaunchPayload(campaign);
       const result = await triggerN8nWebhook(env.N8N_WEBHOOK_URL, env.N8N_WEBHOOK_SECRET, payload);
+
+      // Record every launch attempt (success OR failure) in the history.
+      await storageInstance.createEmailCampaignLaunch({
+        campaignId: campaign.id,
+        campaignName: campaign.campaignName,
+        status: result.ok ? 'success' : 'failed',
+        detail: result.detail ?? result.message ?? null,
+      });
+
       if (!result.ok) {
-        return new Response(JSON.stringify({ message: result.message || 'The automation service rejected the request', status: result.status }), {
+        return new Response(JSON.stringify({ message: result.message || 'The automation service rejected the request', status: result.status, detail: result.detail }), {
           status: 502,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         });
       }
 
       const updated = await storageInstance.markEmailCampaignLaunched(id);
-      return new Response(JSON.stringify({ message: result.message || 'Campaign launched', campaign: updated }), {
+      return new Response(JSON.stringify({ message: result.message || 'Campaign launched', detail: result.detail, campaign: updated }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    if (path === '/api/email-campaign-launches' && method === 'GET') {
+      const launches = await storageInstance.getEmailCampaignLaunches();
+      return new Response(JSON.stringify(launches), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }

@@ -1,2 +1,4 @@
-- [Dual server parity](dual-server-parity.md) — Express dev and Cloudflare Worker are separate backends; every new endpoint/storage method must be added to BOTH.
-- [Webhook response sanitization](webhook-response-sanitization.md) — never forward an external webhook's raw body/error to the client; it can leak the URL or secret header.
+# Memory Index
+
+- [Architect response cap](architect-response-cap.md) — code_review echoes full file contents into its result; keep relevantFiles small + includeGitDiff false.
+- [Dev login API key gotcha](dev-login-api-key.md) — dev API_KEY differs from the key documented in replit.md, so login smoke tests with that documented key 401.

@@ -645,16 +645,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
+      // Guard legacy/migrated rows: a campaign must have a Document ID and at
+      // least 2 Sheet IDs before it can launch with a valid payload.
+      if (!campaign.documentId || !campaign.sheetIds || campaign.sheetIds.length < 2) {
+        return res.status(400).json({
+          message:
+            "This campaign needs a Document ID and at least 2 Sheet IDs before it can launch. Open it, add them, then try again.",
+        });
+      }
+
       const payload = buildLaunchPayload(campaign);
       const result = await triggerN8nWebhook(webhookUrl, secret, payload);
+
+      // Record every launch attempt (success OR failure) in the history.
+      await storage.createEmailCampaignLaunch({
+        campaignId: campaign.id,
+        campaignName: campaign.campaignName,
+        status: result.ok ? "success" : "failed",
+        detail: result.detail ?? result.message ?? null,
+      });
+
       if (!result.ok) {
-        return res.status(502).json({ message: result.message || "The automation service rejected the request", status: result.status });
+        return res.status(502).json({
+          message: result.message || "The automation service rejected the request",
+          status: result.status,
+          detail: result.detail,
+        });
       }
 
       const updated = await storage.markEmailCampaignLaunched(campaign.id);
-      res.json({ message: result.message || "Campaign launched", campaign: updated });
+      res.json({ message: result.message || "Campaign launched", detail: result.detail, campaign: updated });
     } catch (error) {
       res.status(500).json({ message: error instanceof Error ? error.message : "Failed to launch campaign" });
+    }
+  });
+
+  // Launch history — every launch attempt across all campaigns, newest first.
+  app.get("/api/email-campaign-launches", async (_req, res) => {
+    try {
+      const launches = await storage.getEmailCampaignLaunches();
+      res.json(launches);
+    } catch (error) {
+      res.status(500).json({ message: error instanceof Error ? error.message : "Failed to fetch launch history" });
     }
   });
 

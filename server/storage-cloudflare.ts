@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type PromoCode, type InsertPromoCode, type ApiToken, type ApiTokenGenerate, type EmailCampaign, type InsertEmailCampaign, type UpdateEmailCampaign, type EmailCampaignTemplate, type InsertEmailCampaignTemplate } from "@shared/schema";
+import { type User, type InsertUser, type PromoCode, type InsertPromoCode, type ApiToken, type ApiTokenGenerate, type EmailCampaign, type InsertEmailCampaign, type UpdateEmailCampaign, type EmailCampaignTemplate, type InsertEmailCampaignTemplate, type EmailCampaignLaunch, type InsertEmailCampaignLaunch } from "@shared/schema";
 import { createClient } from '@supabase/supabase-js';
 import type { IStorage, PaginationOptions, PaginatedResult } from "./storage";
 
@@ -518,8 +518,7 @@ export class CloudflareStorage implements IStorage {
       campaignName: r.campaign_name,
       campaignType: r.campaign_type ?? null,
       documentId: r.document_id,
-      documentId2: r.document_id_2 ?? null,
-      campaignInfoGid: r.campaign_info_gid,
+      sheetIds: r.sheet_ids ?? [],
       mainScript: r.main_script ?? null,
       followUps: r.follow_ups ?? [],
       expiryDate: r.expiry_date ?? null,
@@ -535,13 +534,23 @@ export class CloudflareStorage implements IStorage {
       id: r.id,
       name: r.name,
       campaignType: r.campaign_type ?? null,
-      documentId: r.document_id,
-      documentId2: r.document_id_2 ?? null,
-      campaignInfoGid: r.campaign_info_gid,
+      documentId: r.document_id ?? null,
+      sheetIds: r.sheet_ids ?? [],
       defaultMainScript: r.default_main_script ?? null,
       defaultFollowUps: r.default_follow_ups ?? [],
       notes: r.notes ?? null,
       createdAt: new Date(r.created_at),
+    };
+  }
+
+  private mapEmailCampaignLaunchFromDb(r: any): EmailCampaignLaunch {
+    return {
+      id: r.id,
+      campaignId: r.campaign_id,
+      campaignName: r.campaign_name,
+      status: r.status,
+      detail: r.detail ?? null,
+      launchedAt: new Date(r.launched_at),
     };
   }
 
@@ -577,8 +586,7 @@ export class CloudflareStorage implements IStorage {
         campaign_name: data.campaignName,
         campaign_type: data.campaignType ?? null,
         document_id: data.documentId,
-        document_id_2: data.documentId2 ?? null,
-        campaign_info_gid: data.campaignInfoGid,
+        sheet_ids: data.sheetIds ?? [],
         main_script: data.mainScript ?? null,
         follow_ups: data.followUps ?? [],
         expiry_date: data.expiryDate ?? null,
@@ -599,8 +607,7 @@ export class CloudflareStorage implements IStorage {
     if (data.campaignName !== undefined) patch.campaign_name = data.campaignName;
     if (data.campaignType !== undefined) patch.campaign_type = data.campaignType ?? null;
     if (data.documentId !== undefined) patch.document_id = data.documentId;
-    if (data.documentId2 !== undefined) patch.document_id_2 = data.documentId2 ?? null;
-    if (data.campaignInfoGid !== undefined) patch.campaign_info_gid = data.campaignInfoGid;
+    if (data.sheetIds !== undefined) patch.sheet_ids = data.sheetIds ?? [];
     if (data.mainScript !== undefined) patch.main_script = data.mainScript ?? null;
     if (data.followUps !== undefined) patch.follow_ups = data.followUps ?? [];
     if (data.expiryDate !== undefined) patch.expiry_date = data.expiryDate ?? null;
@@ -655,9 +662,8 @@ export class CloudflareStorage implements IStorage {
       .insert({
         name: data.name,
         campaign_type: data.campaignType ?? null,
-        document_id: data.documentId,
-        document_id_2: data.documentId2 ?? null,
-        campaign_info_gid: data.campaignInfoGid,
+        document_id: data.documentId ?? null,
+        sheet_ids: data.sheetIds ?? [],
         default_main_script: data.defaultMainScript ?? null,
         default_follow_ups: data.defaultFollowUps ?? [],
         notes: data.notes ?? null,
@@ -669,6 +675,36 @@ export class CloudflareStorage implements IStorage {
       throw new Error(`Failed to create template: ${error.message}`);
     }
     return this.mapEmailCampaignTemplateFromDb(created);
+  }
+
+  async getEmailCampaignLaunches(): Promise<EmailCampaignLaunch[]> {
+    const { data, error } = await this.supabase
+      .from('email_campaign_launches')
+      .select('*')
+      .order('launched_at', { ascending: false });
+    if (error) {
+      console.error('getEmailCampaignLaunches failed:', error);
+      throw new Error(`Failed to fetch launch history: ${error.message}`);
+    }
+    return (data || []).map((r: any) => this.mapEmailCampaignLaunchFromDb(r));
+  }
+
+  async createEmailCampaignLaunch(data: InsertEmailCampaignLaunch): Promise<EmailCampaignLaunch> {
+    const { data: created, error } = await this.supabase
+      .from('email_campaign_launches')
+      .insert({
+        campaign_id: data.campaignId,
+        campaign_name: data.campaignName,
+        status: data.status,
+        detail: data.detail ?? null,
+      })
+      .select()
+      .single();
+    if (error) {
+      console.error('createEmailCampaignLaunch failed:', error);
+      throw new Error(`Failed to record launch: ${error.message}`);
+    }
+    return this.mapEmailCampaignLaunchFromDb(created);
   }
 }
 

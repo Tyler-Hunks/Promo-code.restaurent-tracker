@@ -105,9 +105,10 @@ export const emailCampaigns = pgTable("email_campaigns", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   campaignName: text("campaign_name").notNull(),
   campaignType: text("campaign_type"),
+  // One Google Sheet file (the Document ID) holding the campaign's lead tabs.
   documentId: text("document_id").notNull(),
-  documentId2: text("document_id_2"),
-  campaignInfoGid: text("campaign_info_gid").notNull(),
+  // The tab gids inside that document (at least 2 — e.g. lead lists).
+  sheetIds: text("sheet_ids").array().notNull().default(sql`'{}'::text[]`),
   mainScript: text("main_script"),
   followUps: text("follow_ups").array().notNull().default(sql`'{}'::text[]`),
   expiryDate: date("expiry_date"),
@@ -121,23 +122,44 @@ export const emailCampaignTemplates = pgTable("email_campaign_templates", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
   campaignType: text("campaign_type"),
-  documentId: text("document_id").notNull(),
-  documentId2: text("document_id_2"),
-  campaignInfoGid: text("campaign_info_gid").notNull(),
+  // Optional on a template — you may reuse just the scripts.
+  documentId: text("document_id"),
+  sheetIds: text("sheet_ids").array().notNull().default(sql`'{}'::text[]`),
   defaultMainScript: text("default_main_script"),
   defaultFollowUps: text("default_follow_ups").array().notNull().default(sql`'{}'::text[]`),
   notes: text("notes"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+// Full launch history — one row per launch attempt (success or failure), so the
+// Campaigns tab can show "every launch" as well as a per-campaign rollup.
+export const emailCampaignLaunches = pgTable("email_campaign_launches", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  campaignId: varchar("campaign_id").notNull(),
+  campaignName: text("campaign_name").notNull(), // snapshot at launch time
+  status: text("status", { enum: ["success", "failed"] }).notNull(),
+  detail: text("detail"), // truncated n8n response body or error message
+  launchedAt: timestamp("launched_at").notNull().defaultNow(),
+});
+
+// Lenient format checks so obvious typos are caught without rejecting valid IDs.
+const documentIdField = z
+  .string()
+  .min(1, "Google Sheet Document ID is required")
+  .regex(/^[A-Za-z0-9_-]+$/, "Document ID should be just the ID from the URL (letters, numbers, - and _)");
+const sheetIdsField = z
+  .array(
+    z.string().regex(/^\d+$/, "Each Sheet ID (gid) should be a number, e.g. 0 or 123456789"),
+  )
+  .min(2, "Add at least 2 Sheet IDs (gids)");
+
 export const insertEmailCampaignSchema = createInsertSchema(emailCampaigns)
   .omit({ id: true, status: true, lastLaunchedAt: true, createdAt: true })
   .extend({
     campaignName: z.string().min(1, "Campaign name is required"),
     campaignType: z.string().optional().nullable(),
-    documentId: z.string().min(1, "Google Sheet Document ID is required"),
-    documentId2: z.string().optional().nullable(),
-    campaignInfoGid: z.string().min(1, "Campaign Info tab GID is required"),
+    documentId: documentIdField,
+    sheetIds: sheetIdsField,
     mainScript: z.string().optional().nullable(),
     followUps: z.array(z.string()).optional().default([]),
     expiryDate: z
@@ -155,16 +177,45 @@ export const insertEmailCampaignTemplateSchema = createInsertSchema(emailCampaig
   .extend({
     name: z.string().min(1, "Template name is required"),
     campaignType: z.string().optional().nullable(),
-    documentId: z.string().min(1, "Google Sheet Document ID is required"),
-    documentId2: z.string().optional().nullable(),
-    campaignInfoGid: z.string().min(1, "Campaign Info tab GID is required"),
+    documentId: documentIdField.optional().nullable(),
+    sheetIds: z
+      .array(z.string().regex(/^\d+$/, "Each Sheet ID (gid) should be a number"))
+      .optional()
+      .default([]),
     defaultMainScript: z.string().optional().nullable(),
     defaultFollowUps: z.array(z.string()).optional().default([]),
     notes: z.string().optional().nullable(),
   });
+
+export const insertEmailCampaignLaunchSchema = createInsertSchema(emailCampaignLaunches).omit({
+  id: true,
+  launchedAt: true,
+});
+
+// Finds every {{ placeholder }} token used across a campaign's scripts so the UI
+// can show which variables n8n must fill, and so they can ride along in the
+// launch payload. Shared by the frontend (live chips) and backend (payload).
+export function extractPlaceholders(input: {
+  mainScript?: string | null;
+  followUps?: string[] | null;
+}): string[] {
+  const texts = [input.mainScript ?? "", ...(input.followUps ?? [])];
+  const found = new Set<string>();
+  const re = /\{\{\s*([^{}]+?)\s*\}\}/g;
+  for (const text of texts) {
+    let match: RegExpExecArray | null;
+    while ((match = re.exec(text)) !== null) {
+      const token = match[1].trim();
+      if (token) found.add(token);
+    }
+  }
+  return Array.from(found);
+}
 
 export type EmailCampaign = typeof emailCampaigns.$inferSelect;
 export type InsertEmailCampaign = z.infer<typeof insertEmailCampaignSchema>;
 export type UpdateEmailCampaign = z.infer<typeof updateEmailCampaignSchema>;
 export type EmailCampaignTemplate = typeof emailCampaignTemplates.$inferSelect;
 export type InsertEmailCampaignTemplate = z.infer<typeof insertEmailCampaignTemplateSchema>;
+export type EmailCampaignLaunch = typeof emailCampaignLaunches.$inferSelect;
+export type InsertEmailCampaignLaunch = z.infer<typeof insertEmailCampaignLaunchSchema>;

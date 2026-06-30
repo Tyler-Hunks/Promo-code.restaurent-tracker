@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type PromoCode, type InsertPromoCode, type ApiToken, type InsertApiToken, type EmailCampaign, type InsertEmailCampaign, type UpdateEmailCampaign, type EmailCampaignTemplate, type InsertEmailCampaignTemplate, users, promoCodes, apiTokens, emailCampaigns, emailCampaignTemplates } from "@shared/schema";
+import { type User, type InsertUser, type PromoCode, type InsertPromoCode, type ApiToken, type InsertApiToken, type EmailCampaign, type InsertEmailCampaign, type UpdateEmailCampaign, type EmailCampaignTemplate, type InsertEmailCampaignTemplate, type EmailCampaignLaunch, type InsertEmailCampaignLaunch, users, promoCodes, apiTokens, emailCampaigns, emailCampaignTemplates, emailCampaignLaunches } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { db } from "./db";
 import { eq, sql, and, inArray } from "drizzle-orm";
@@ -57,6 +57,8 @@ export interface IStorage {
   markEmailCampaignLaunched(id: string): Promise<EmailCampaign | undefined>;
   getEmailCampaignTemplates(): Promise<EmailCampaignTemplate[]>;
   createEmailCampaignTemplate(data: InsertEmailCampaignTemplate): Promise<EmailCampaignTemplate>;
+  getEmailCampaignLaunches(): Promise<EmailCampaignLaunch[]>;
+  createEmailCampaignLaunch(data: InsertEmailCampaignLaunch): Promise<EmailCampaignLaunch>;
 }
 
 export class MemStorage implements IStorage {
@@ -65,6 +67,7 @@ export class MemStorage implements IStorage {
   private apiTokens: Map<string, ApiToken>;
   private emailCampaigns: Map<string, EmailCampaign>;
   private emailCampaignTemplates: Map<string, EmailCampaignTemplate>;
+  private emailCampaignLaunches: Map<string, EmailCampaignLaunch>;
 
   constructor() {
     this.users = new Map();
@@ -72,6 +75,7 @@ export class MemStorage implements IStorage {
     this.apiTokens = new Map();
     this.emailCampaigns = new Map();
     this.emailCampaignTemplates = new Map();
+    this.emailCampaignLaunches = new Map();
   }
 
   async getUser(id: string): Promise<User | undefined> {
@@ -409,8 +413,7 @@ export class MemStorage implements IStorage {
       campaignName: data.campaignName,
       campaignType: data.campaignType ?? null,
       documentId: data.documentId,
-      documentId2: data.documentId2 ?? null,
-      campaignInfoGid: data.campaignInfoGid,
+      sheetIds: data.sheetIds ?? [],
       mainScript: data.mainScript ?? null,
       followUps: data.followUps ?? [],
       expiryDate: data.expiryDate ?? null,
@@ -431,8 +434,7 @@ export class MemStorage implements IStorage {
       campaignName: data.campaignName ?? existing.campaignName,
       campaignType: data.campaignType !== undefined ? (data.campaignType ?? null) : existing.campaignType,
       documentId: data.documentId ?? existing.documentId,
-      documentId2: data.documentId2 !== undefined ? (data.documentId2 ?? null) : existing.documentId2,
-      campaignInfoGid: data.campaignInfoGid ?? existing.campaignInfoGid,
+      sheetIds: data.sheetIds !== undefined ? (data.sheetIds ?? []) : existing.sheetIds,
       mainScript: data.mainScript !== undefined ? (data.mainScript ?? null) : existing.mainScript,
       followUps: data.followUps !== undefined ? (data.followUps ?? []) : existing.followUps,
       expiryDate: data.expiryDate !== undefined ? (data.expiryDate ?? null) : existing.expiryDate,
@@ -466,9 +468,8 @@ export class MemStorage implements IStorage {
       id,
       name: data.name,
       campaignType: data.campaignType ?? null,
-      documentId: data.documentId,
-      documentId2: data.documentId2 ?? null,
-      campaignInfoGid: data.campaignInfoGid,
+      documentId: data.documentId ?? null,
+      sheetIds: data.sheetIds ?? [],
       defaultMainScript: data.defaultMainScript ?? null,
       defaultFollowUps: data.defaultFollowUps ?? [],
       notes: data.notes ?? null,
@@ -476,6 +477,26 @@ export class MemStorage implements IStorage {
     };
     this.emailCampaignTemplates.set(id, template);
     return template;
+  }
+
+  async getEmailCampaignLaunches(): Promise<EmailCampaignLaunch[]> {
+    return Array.from(this.emailCampaignLaunches.values()).sort(
+      (a, b) => new Date(b.launchedAt).getTime() - new Date(a.launchedAt).getTime()
+    );
+  }
+
+  async createEmailCampaignLaunch(data: InsertEmailCampaignLaunch): Promise<EmailCampaignLaunch> {
+    const id = randomUUID();
+    const launch: EmailCampaignLaunch = {
+      id,
+      campaignId: data.campaignId,
+      campaignName: data.campaignName,
+      status: data.status,
+      detail: data.detail ?? null,
+      launchedAt: new Date(),
+    };
+    this.emailCampaignLaunches.set(id, launch);
+    return launch;
   }
 }
 
@@ -782,8 +803,7 @@ export class DatabaseStorage implements IStorage {
       campaignName: data.campaignName,
       campaignType: data.campaignType ?? null,
       documentId: data.documentId,
-      documentId2: data.documentId2 ?? null,
-      campaignInfoGid: data.campaignInfoGid,
+      sheetIds: data.sheetIds ?? [],
       mainScript: data.mainScript ?? null,
       followUps: data.followUps ?? [],
       expiryDate: data.expiryDate ?? null,
@@ -797,8 +817,7 @@ export class DatabaseStorage implements IStorage {
     if (data.campaignName !== undefined) patch.campaignName = data.campaignName;
     if (data.campaignType !== undefined) patch.campaignType = data.campaignType ?? null;
     if (data.documentId !== undefined) patch.documentId = data.documentId;
-    if (data.documentId2 !== undefined) patch.documentId2 = data.documentId2 ?? null;
-    if (data.campaignInfoGid !== undefined) patch.campaignInfoGid = data.campaignInfoGid;
+    if (data.sheetIds !== undefined) patch.sheetIds = data.sheetIds ?? [];
     if (data.mainScript !== undefined) patch.mainScript = data.mainScript ?? null;
     if (data.followUps !== undefined) patch.followUps = data.followUps ?? [];
     if (data.expiryDate !== undefined) patch.expiryDate = data.expiryDate ?? null;
@@ -829,12 +848,25 @@ export class DatabaseStorage implements IStorage {
     const [created] = await db.insert(emailCampaignTemplates).values({
       name: data.name,
       campaignType: data.campaignType ?? null,
-      documentId: data.documentId,
-      documentId2: data.documentId2 ?? null,
-      campaignInfoGid: data.campaignInfoGid,
+      documentId: data.documentId ?? null,
+      sheetIds: data.sheetIds ?? [],
       defaultMainScript: data.defaultMainScript ?? null,
       defaultFollowUps: data.defaultFollowUps ?? [],
       notes: data.notes ?? null,
+    }).returning();
+    return created;
+  }
+
+  async getEmailCampaignLaunches(): Promise<EmailCampaignLaunch[]> {
+    return await db.select().from(emailCampaignLaunches).orderBy(sql`${emailCampaignLaunches.launchedAt} DESC`);
+  }
+
+  async createEmailCampaignLaunch(data: InsertEmailCampaignLaunch): Promise<EmailCampaignLaunch> {
+    const [created] = await db.insert(emailCampaignLaunches).values({
+      campaignId: data.campaignId,
+      campaignName: data.campaignName,
+      status: data.status,
+      detail: data.detail ?? null,
     }).returning();
     return created;
   }

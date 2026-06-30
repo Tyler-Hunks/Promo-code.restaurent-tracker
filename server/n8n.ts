@@ -1,4 +1,4 @@
-import type { EmailCampaign } from "../shared/schema";
+import { type EmailCampaign, extractPlaceholders } from "../shared/schema";
 
 // Builds the exact JSON body POSTed to the n8n webhook when a campaign launches.
 // Shared by the Express dev server (routes.ts) and the Cloudflare Worker
@@ -9,10 +9,11 @@ export function buildLaunchPayload(campaign: EmailCampaign) {
     campaignName: campaign.campaignName,
     campaignType: campaign.campaignType ?? null,
     documentId: campaign.documentId,
-    documentId2: campaign.documentId2 ?? null,
-    campaignInfoGid: campaign.campaignInfoGid,
+    sheetIds: campaign.sheetIds ?? [],
     mainScript: campaign.mainScript ?? null,
     followUps: campaign.followUps ?? [],
+    // The {{tokens}} found in the scripts, so n8n knows which variables to fill.
+    placeholders: extractPlaceholders(campaign),
     expiryDate: campaign.expiryDate ?? null,
     triggeredAt: new Date().toISOString(),
   };
@@ -22,6 +23,10 @@ export interface N8nTriggerResult {
   ok: boolean;
   status: number;
   message: string;
+  // The (truncated) response body n8n returned. Safe to show: the user owns the
+  // n8n workflow and controls exactly what it sends back. Only populated when we
+  // actually got an HTTP response — never from a network/timeout error.
+  detail?: string;
 }
 
 // Fires the n8n webhook server-side with the secret header. Never throws — it
@@ -53,20 +58,25 @@ export async function triggerN8nWebhook(
       signal: controller.signal,
     });
 
-    // Drain the body so the connection can be reused, but never forward the
-    // webhook's raw response to the client — it could reflect the request URL,
-    // the secret header, or other server-only details. Return controlled
-    // messages only.
+    // Capture the response body n8n returned so the app can show what happened
+    // (e.g. "queued 240 leads"). The user owns the n8n workflow, so its response
+    // is their own data — but we cap the length to keep payloads sane.
+    let detail: string | undefined;
     try {
-      await res.text();
+      const bodyText = await res.text();
+      const trimmed = bodyText?.trim();
+      if (trimmed) {
+        detail = trimmed.length > 2000 ? `${trimmed.slice(0, 2000)}…` : trimmed;
+      }
     } catch {
-      // ignore body read errors
+      // ignore body read errors — detail just stays empty
     }
 
     return {
       ok: res.ok,
       status: res.status,
       message: res.ok ? "Workflow triggered" : `The automation service returned status ${res.status}`,
+      detail,
     };
   } catch (err: any) {
     // Do not surface err.message — fetch errors can contain the webhook URL.
