@@ -702,7 +702,7 @@ export default function Campaigns() {
                 </CardHeader>
                 <CardContent className="space-y-2 text-sm">
                   <div className="flex justify-between gap-2">
-                    <span className="text-muted-foreground">Sheet ID</span>
+                    <span className="text-muted-foreground">Document ID</span>
                     <span className="font-mono" title={c.documentId}>
                       {truncateId(c.documentId)}
                     </span>

@@ -618,8 +618,8 @@ async function handleAPI(request: Request, env: Env): Promise<Response> {
         });
       }
 
-      if (!env.N8N_WEBHOOK_URL || !env.N8N_WEBHOOK_SECRET) {
-        return new Response(JSON.stringify({ message: "Campaign launching isn't configured yet. Add N8N_WEBHOOK_URL and N8N_WEBHOOK_SECRET." }), {
+      if (!env.N8N_WEBHOOK_URL) {
+        return new Response(JSON.stringify({ message: "Campaign launching isn't configured yet. Add your n8n webhook URL (N8N_WEBHOOK_URL)." }), {
           status: 503,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         });
@@ -628,7 +628,7 @@ async function handleAPI(request: Request, env: Env): Promise<Response> {
       const payload = buildLaunchPayload(campaign);
       const result = await triggerN8nWebhook(env.N8N_WEBHOOK_URL, env.N8N_WEBHOOK_SECRET, payload);
       if (!result.ok) {
-        return new Response(JSON.stringify({ message: result.message || 'n8n rejected the request', status: result.status }), {
+        return new Response(JSON.stringify({ message: result.message || 'The automation service rejected the request', status: result.status }), {
           status: 502,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         });

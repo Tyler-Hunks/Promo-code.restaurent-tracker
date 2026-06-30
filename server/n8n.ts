@@ -29,20 +29,26 @@ export interface N8nTriggerResult {
 // campaign as launched. The secret is never logged or returned to the client.
 export async function triggerN8nWebhook(
   webhookUrl: string,
-  secret: string,
+  secret: string | undefined,
   payload: Record<string, unknown>,
   timeoutMs = 25000,
 ): Promise<N8nTriggerResult> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  // Only send the auth header when a secret is configured. If the n8n webhook
+  // uses Authentication: None, the URL/path alone is the protection.
+  if (secret) {
+    headers["X-Trigger-Secret"] = secret;
+  }
+
   try {
     const res = await fetch(webhookUrl, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Trigger-Secret": secret,
-      },
+      headers,
       body: JSON.stringify(payload),
       signal: controller.signal,
     });

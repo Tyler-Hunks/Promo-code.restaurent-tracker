@@ -19,16 +19,21 @@ There are four things to set up, in this order:
 
 1. In n8n, create a new workflow (or open the one that sends your emails).
 2. Add a **Webhook** node as the first step.
-   - **HTTP Method:** `POST`
-   - **Path:** anything you like, e.g. `launch-campaign`
+   - **HTTP Method:** must be **`POST`** (the app sends the campaign details in
+     the request body — a `GET` webhook will not receive them).
+   - **Path:** n8n fills this with a long random ID by default — that's fine.
    - Copy the **Production URL** it shows you — this is your `N8N_WEBHOOK_URL`.
-3. Protect the webhook with a shared password (so only your app can trigger it):
-   - The app always sends a header called **`X-Trigger-Secret`** with every
-     request. Its value is whatever you choose for `N8N_WEBHOOK_SECRET`.
-   - In the Webhook node, add **Header Auth** (or an IF/Filter step) that checks
-     that the `X-Trigger-Secret` header matches your chosen password. Reject the
-     request if it doesn't match.
-4. **Activate** the workflow so the Production URL is live.
+3. **(Optional) Add a password for extra security.**
+   - By default the long, random path in your webhook URL already acts as
+     protection. If that's enough for you, leave **Authentication: None** and
+     skip the secret completely — you only need the URL.
+   - If you want an extra check, set the Webhook node's **Authentication** to
+     **Header Auth** with the header name `X-Trigger-Secret`, and use that same
+     value as `N8N_WEBHOOK_SECRET`. The app sends that header automatically
+     whenever the secret is set.
+4. **Activate** the workflow (the toggle at the top-right) so the **Production
+   URL** is live. The **Test URL** only works for a single event right after you
+   click "Listen for test event" — use the Production URL for real launches.
 
 ### What the app sends to n8n
 
@@ -49,7 +54,7 @@ Every launch sends a `POST` request with this JSON body:
 }
 ```
 
-Header sent with the request:
+Header sent with the request (only when you've set a secret):
 
 ```
 X-Trigger-Secret: <your N8N_WEBHOOK_SECRET>
@@ -80,10 +85,10 @@ The Campaigns feature uses two new tables: `email_campaigns` and
 
 The app needs two secret values:
 
-| Secret               | What it is                                            |
-| -------------------- | ----------------------------------------------------- |
-| `N8N_WEBHOOK_URL`    | The Production URL from your n8n Webhook node          |
-| `N8N_WEBHOOK_SECRET` | The password you chose for the `X-Trigger-Secret` header |
+| Secret               | What it is                                                       |
+| -------------------- | --------------------------------------------------------------- |
+| `N8N_WEBHOOK_URL`    | **Required.** The Production URL from your n8n Webhook node      |
+| `N8N_WEBHOOK_SECRET` | **Optional.** Only needed if you turned on Header Auth in n8n    |
 
 ### Development (here in Replit)
 
@@ -96,12 +101,13 @@ the development preview.
 
 ### Production (Cloudflare Workers)
 
-Set the same two secrets on the live Worker from your terminal:
+Set the webhook URL on the live Worker from your terminal:
 
 ```bash
 wrangler secret put N8N_WEBHOOK_URL
 # paste the n8n Production URL when prompted
 
+# Only if you turned on Header Auth in n8n:
 wrangler secret put N8N_WEBHOOK_SECRET
 # paste your chosen password when prompted
 ```

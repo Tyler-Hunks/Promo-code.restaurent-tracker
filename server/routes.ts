@@ -638,17 +638,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const webhookUrl = process.env.N8N_WEBHOOK_URL;
-      const secret = process.env.N8N_WEBHOOK_SECRET;
-      if (!webhookUrl || !secret) {
+      const secret = process.env.N8N_WEBHOOK_SECRET; // optional — only used if your n8n webhook has Header Auth
+      if (!webhookUrl) {
         return res.status(503).json({
-          message: "Campaign launching isn't configured yet. Add N8N_WEBHOOK_URL and N8N_WEBHOOK_SECRET.",
+          message: "Campaign launching isn't configured yet. Add your n8n webhook URL (N8N_WEBHOOK_URL).",
         });
       }
 
       const payload = buildLaunchPayload(campaign);
       const result = await triggerN8nWebhook(webhookUrl, secret, payload);
       if (!result.ok) {
-        return res.status(502).json({ message: result.message || "n8n rejected the request", status: result.status });
+        return res.status(502).json({ message: result.message || "The automation service rejected the request", status: result.status });
       }
 
       const updated = await storage.markEmailCampaignLaunched(campaign.id);
