@@ -1,0 +1,63 @@
+Add a new tab called "Campaigns" to my existing Promo Code Manager web app.
+
+CONTEXT
+The app is a self-built tool (Cloudflare Worker backend + Supabase database) that
+currently manages promo codes. Match the existing stack, styling, component
+patterns, and navigation — this should look and feel like a native part of the app,
+not a bolt-on. Add "Campaigns" to the existing tab/nav structure.
+
+PURPOSE OF THE TAB
+This tab launches cold-email campaigns by triggering an external n8n workflow via a
+webhook, replacing a manual Google Sheets trigger. Each campaign corresponds to a
+Google Sheet (which already holds the campaign's scripts and lead list); the form
+does NOT upload leads — it only stores campaign config and fires the trigger.
+
+DATA MODEL (Supabase)
+Create a `campaigns` table if it doesn't exist:
+- id (uuid, pk)
+- campaign_name (text)            e.g. "Campaign 7"
+- document_id (text)              the Google Sheet document ID
+- campaign_info_gid (text)        the gid of the "Campaign Info" tab
+- expiry_date (date, nullable)    promo-code expiry for this campaign
+- notes (text, nullable)
+- status (text)                   "draft" | "launched"
+- last_launched_at (timestamptz, nullable)
+- created_at (timestamptz, default now())
+
+UI
+1. A list of saved campaigns (cards or a table) showing name, a truncated
+   document_id, expiry_date, status, and last_launched_at. Each row has a
+   "Launch" button and an "Edit" action.
+2. An "Add campaign" form (modal or inline) with fields:
+   - Campaign name (required, text)
+   - Google Sheet Document ID (required, text)
+   - Campaign Info tab GID (required, text)
+   - Expiry date (optional, date picker)
+   - Notes (optional, textarea)
+   Saving writes a row to the `campaigns` table with status "draft".
+
+LAUNCH BEHAVIOUR
+When "Launch" is clicked:
+- POST a JSON body to the n8n webhook URL:
+  {
+    "campaignName": <campaign_name>,
+    "documentId": <document_id>,
+    "campaignInfoGid": <campaign_info_gid>,
+    "expiryDate": <expiry_date or null>,
+    "triggeredAt": <ISO timestamp>
+  }
+- Include a header "X-Trigger-Secret: <secret>" for authentication.
+- The webhook URL and the secret must come from environment variables / Replit
+  Secrets (N8N_WEBHOOK_URL, N8N_WEBHOOK_SECRET) — never hardcode them.
+- Show a loading state on the button, then a success or error toast based on the
+  response. On success, update that campaign's status to "launched" and
+  last_launched_at to now() in Supabase.
+- Add a confirmation step before launching ("Launch <campaign name>? This triggers
+  the live workflow.") to prevent accidental sends.
+
+QUALITY
+- Validate required fields before allowing save/launch.
+- Handle network/webhook errors gracefully (show the error, don't leave the button
+  spinning).
+- Make it responsive and consistent with the rest of the app.
+- Don't touch or break the existing promo-code functionality.
