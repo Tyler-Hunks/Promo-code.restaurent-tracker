@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type PromoCode, type InsertPromoCode, type ApiToken, type InsertApiToken, users, promoCodes, apiTokens } from "@shared/schema";
+import { type User, type InsertUser, type PromoCode, type InsertPromoCode, type ApiToken, type InsertApiToken, type EmailCampaign, type InsertEmailCampaign, type UpdateEmailCampaign, type EmailCampaignTemplate, type InsertEmailCampaignTemplate, users, promoCodes, apiTokens, emailCampaigns, emailCampaignTemplates } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { db } from "./db";
 import { eq, sql, and, inArray } from "drizzle-orm";
@@ -48,17 +48,30 @@ export interface IStorage {
   getCampaigns(): Promise<string[]>;
   getCampaignStats(): Promise<Array<{ campaignName: string; available: number; used: number; total: number }>>;
   importPromoCodes(promoCodes: InsertPromoCode[]): Promise<{ imported: number; skipped: number; errors: string[] }>;
+
+  // Email campaign methods (Campaigns tab — n8n trigger)
+  getEmailCampaigns(): Promise<EmailCampaign[]>;
+  getEmailCampaign(id: string): Promise<EmailCampaign | undefined>;
+  createEmailCampaign(data: InsertEmailCampaign): Promise<EmailCampaign>;
+  updateEmailCampaign(id: string, data: UpdateEmailCampaign): Promise<EmailCampaign | undefined>;
+  markEmailCampaignLaunched(id: string): Promise<EmailCampaign | undefined>;
+  getEmailCampaignTemplates(): Promise<EmailCampaignTemplate[]>;
+  createEmailCampaignTemplate(data: InsertEmailCampaignTemplate): Promise<EmailCampaignTemplate>;
 }
 
 export class MemStorage implements IStorage {
   private users: Map<string, User>;
   private promoCodes: Map<string, PromoCode>;
   private apiTokens: Map<string, ApiToken>;
+  private emailCampaigns: Map<string, EmailCampaign>;
+  private emailCampaignTemplates: Map<string, EmailCampaignTemplate>;
 
   constructor() {
     this.users = new Map();
     this.promoCodes = new Map();
     this.apiTokens = new Map();
+    this.emailCampaigns = new Map();
+    this.emailCampaignTemplates = new Map();
   }
 
   async getUser(id: string): Promise<User | undefined> {
@@ -377,6 +390,93 @@ export class MemStorage implements IStorage {
 
     return { imported, skipped, errors };
   }
+
+  // Email campaign methods
+  async getEmailCampaigns(): Promise<EmailCampaign[]> {
+    return Array.from(this.emailCampaigns.values()).sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+  }
+
+  async getEmailCampaign(id: string): Promise<EmailCampaign | undefined> {
+    return this.emailCampaigns.get(id);
+  }
+
+  async createEmailCampaign(data: InsertEmailCampaign): Promise<EmailCampaign> {
+    const id = randomUUID();
+    const campaign: EmailCampaign = {
+      id,
+      campaignName: data.campaignName,
+      campaignType: data.campaignType ?? null,
+      documentId: data.documentId,
+      documentId2: data.documentId2 ?? null,
+      campaignInfoGid: data.campaignInfoGid,
+      mainScript: data.mainScript ?? null,
+      followUps: data.followUps ?? [],
+      expiryDate: data.expiryDate ?? null,
+      notes: data.notes ?? null,
+      status: "draft",
+      lastLaunchedAt: null,
+      createdAt: new Date(),
+    };
+    this.emailCampaigns.set(id, campaign);
+    return campaign;
+  }
+
+  async updateEmailCampaign(id: string, data: UpdateEmailCampaign): Promise<EmailCampaign | undefined> {
+    const existing = this.emailCampaigns.get(id);
+    if (!existing) return undefined;
+    const updated: EmailCampaign = {
+      ...existing,
+      campaignName: data.campaignName ?? existing.campaignName,
+      campaignType: data.campaignType !== undefined ? (data.campaignType ?? null) : existing.campaignType,
+      documentId: data.documentId ?? existing.documentId,
+      documentId2: data.documentId2 !== undefined ? (data.documentId2 ?? null) : existing.documentId2,
+      campaignInfoGid: data.campaignInfoGid ?? existing.campaignInfoGid,
+      mainScript: data.mainScript !== undefined ? (data.mainScript ?? null) : existing.mainScript,
+      followUps: data.followUps !== undefined ? (data.followUps ?? []) : existing.followUps,
+      expiryDate: data.expiryDate !== undefined ? (data.expiryDate ?? null) : existing.expiryDate,
+      notes: data.notes !== undefined ? (data.notes ?? null) : existing.notes,
+    };
+    this.emailCampaigns.set(id, updated);
+    return updated;
+  }
+
+  async markEmailCampaignLaunched(id: string): Promise<EmailCampaign | undefined> {
+    const existing = this.emailCampaigns.get(id);
+    if (!existing) return undefined;
+    const updated: EmailCampaign = {
+      ...existing,
+      status: "launched",
+      lastLaunchedAt: new Date(),
+    };
+    this.emailCampaigns.set(id, updated);
+    return updated;
+  }
+
+  async getEmailCampaignTemplates(): Promise<EmailCampaignTemplate[]> {
+    return Array.from(this.emailCampaignTemplates.values()).sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+  }
+
+  async createEmailCampaignTemplate(data: InsertEmailCampaignTemplate): Promise<EmailCampaignTemplate> {
+    const id = randomUUID();
+    const template: EmailCampaignTemplate = {
+      id,
+      name: data.name,
+      campaignType: data.campaignType ?? null,
+      documentId: data.documentId,
+      documentId2: data.documentId2 ?? null,
+      campaignInfoGid: data.campaignInfoGid,
+      defaultMainScript: data.defaultMainScript ?? null,
+      defaultFollowUps: data.defaultFollowUps ?? [],
+      notes: data.notes ?? null,
+      createdAt: new Date(),
+    };
+    this.emailCampaignTemplates.set(id, template);
+    return template;
+  }
 }
 
 // DatabaseStorage implementation
@@ -665,6 +765,78 @@ export class DatabaseStorage implements IStorage {
     }
 
     return { imported, skipped, errors };
+  }
+
+  // Email campaign methods
+  async getEmailCampaigns(): Promise<EmailCampaign[]> {
+    return await db.select().from(emailCampaigns).orderBy(sql`${emailCampaigns.createdAt} DESC`);
+  }
+
+  async getEmailCampaign(id: string): Promise<EmailCampaign | undefined> {
+    const [row] = await db.select().from(emailCampaigns).where(eq(emailCampaigns.id, id));
+    return row || undefined;
+  }
+
+  async createEmailCampaign(data: InsertEmailCampaign): Promise<EmailCampaign> {
+    const [created] = await db.insert(emailCampaigns).values({
+      campaignName: data.campaignName,
+      campaignType: data.campaignType ?? null,
+      documentId: data.documentId,
+      documentId2: data.documentId2 ?? null,
+      campaignInfoGid: data.campaignInfoGid,
+      mainScript: data.mainScript ?? null,
+      followUps: data.followUps ?? [],
+      expiryDate: data.expiryDate ?? null,
+      notes: data.notes ?? null,
+    }).returning();
+    return created;
+  }
+
+  async updateEmailCampaign(id: string, data: UpdateEmailCampaign): Promise<EmailCampaign | undefined> {
+    const patch: Record<string, any> = {};
+    if (data.campaignName !== undefined) patch.campaignName = data.campaignName;
+    if (data.campaignType !== undefined) patch.campaignType = data.campaignType ?? null;
+    if (data.documentId !== undefined) patch.documentId = data.documentId;
+    if (data.documentId2 !== undefined) patch.documentId2 = data.documentId2 ?? null;
+    if (data.campaignInfoGid !== undefined) patch.campaignInfoGid = data.campaignInfoGid;
+    if (data.mainScript !== undefined) patch.mainScript = data.mainScript ?? null;
+    if (data.followUps !== undefined) patch.followUps = data.followUps ?? [];
+    if (data.expiryDate !== undefined) patch.expiryDate = data.expiryDate ?? null;
+    if (data.notes !== undefined) patch.notes = data.notes ?? null;
+
+    if (Object.keys(patch).length === 0) {
+      return this.getEmailCampaign(id);
+    }
+
+    const [updated] = await db.update(emailCampaigns).set(patch).where(eq(emailCampaigns.id, id)).returning();
+    return updated || undefined;
+  }
+
+  async markEmailCampaignLaunched(id: string): Promise<EmailCampaign | undefined> {
+    const [updated] = await db
+      .update(emailCampaigns)
+      .set({ status: "launched", lastLaunchedAt: new Date() })
+      .where(eq(emailCampaigns.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async getEmailCampaignTemplates(): Promise<EmailCampaignTemplate[]> {
+    return await db.select().from(emailCampaignTemplates).orderBy(sql`${emailCampaignTemplates.createdAt} DESC`);
+  }
+
+  async createEmailCampaignTemplate(data: InsertEmailCampaignTemplate): Promise<EmailCampaignTemplate> {
+    const [created] = await db.insert(emailCampaignTemplates).values({
+      name: data.name,
+      campaignType: data.campaignType ?? null,
+      documentId: data.documentId,
+      documentId2: data.documentId2 ?? null,
+      campaignInfoGid: data.campaignInfoGid,
+      defaultMainScript: data.defaultMainScript ?? null,
+      defaultFollowUps: data.defaultFollowUps ?? [],
+      notes: data.notes ?? null,
+    }).returning();
+    return created;
   }
 }
 

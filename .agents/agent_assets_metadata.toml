@@ -6,3 +6,9 @@ id = "uf_YlGRj9APjmAiAiqPYk"
 uri = "file://MANUAL.md"
 type = "text"
 title = "Promo Code Manager — User Manual"
+
+[[outputs]]
+id = "_sSi_i3iUOXW4PF7ZI5J-"
+uri = "file://CAMPAIGNS_SETUP.md"
+type = "text"
+title = "Campaigns Tab — Setup & Deploy Guide"

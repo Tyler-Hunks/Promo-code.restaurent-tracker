@@ -112,3 +112,52 @@ BEGIN
     FROM promo_codes;
 END;
 $$ LANGUAGE plpgsql;
+
+-- ========================================
+-- EMAIL CAMPAIGNS ("Campaigns" tab — triggers n8n cold-email workflows)
+-- ========================================
+-- These are SEPARATE from the promo-code "campaigns" (which live on
+-- promo_codes.campaign_name). Required for the Campaigns tab to work.
+CREATE TABLE IF NOT EXISTS email_campaigns (
+    id VARCHAR PRIMARY KEY DEFAULT uuid_generate_v4()::VARCHAR,
+    campaign_name TEXT NOT NULL,
+    campaign_type TEXT,
+    document_id TEXT NOT NULL,
+    document_id_2 TEXT,
+    campaign_info_gid TEXT NOT NULL,
+    main_script TEXT,
+    follow_ups TEXT[] NOT NULL DEFAULT '{}',
+    expiry_date DATE,
+    notes TEXT,
+    status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'launched')),
+    last_launched_at TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS email_campaign_templates (
+    id VARCHAR PRIMARY KEY DEFAULT uuid_generate_v4()::VARCHAR,
+    name TEXT NOT NULL,
+    campaign_type TEXT,
+    document_id TEXT NOT NULL,
+    document_id_2 TEXT,
+    campaign_info_gid TEXT NOT NULL,
+    default_main_script TEXT,
+    default_follow_ups TEXT[] NOT NULL DEFAULT '{}',
+    notes TEXT,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+
+-- Indexes
+CREATE INDEX IF NOT EXISTS idx_email_campaigns_created_at ON email_campaigns(created_at);
+CREATE INDEX IF NOT EXISTS idx_email_campaigns_status ON email_campaigns(status);
+CREATE INDEX IF NOT EXISTS idx_email_campaigns_type ON email_campaigns(campaign_type);
+CREATE INDEX IF NOT EXISTS idx_email_campaign_templates_name ON email_campaign_templates(name);
+
+-- RLS: access is enforced in the app layer via Bearer tokens. Allow the anon
+-- key (used by the Cloudflare Worker) to read/write, matching the other tables.
+ALTER TABLE email_campaigns ENABLE ROW LEVEL SECURITY;
+ALTER TABLE email_campaign_templates ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow all operations" ON email_campaigns;
+DROP POLICY IF EXISTS "Allow all operations" ON email_campaign_templates;
+CREATE POLICY "Allow all operations" ON email_campaigns FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all operations" ON email_campaign_templates FOR ALL USING (true) WITH CHECK (true);

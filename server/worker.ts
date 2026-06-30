@@ -1,7 +1,8 @@
 // Cloudflare Worker entry point
 import { storage } from "./storage-cloudflare";
-import { insertPromoCodeSchema, bulkGenerateSchema, apiTokenGenerateSchema, deleteBulkByFiltersSchema } from "../shared/schema";
+import { insertPromoCodeSchema, bulkGenerateSchema, apiTokenGenerateSchema, deleteBulkByFiltersSchema, insertEmailCampaignSchema, updateEmailCampaignSchema, insertEmailCampaignTemplateSchema } from "../shared/schema";
 import { z } from "zod";
+import { buildLaunchPayload, triggerN8nWebhook } from "./n8n";
 
 // Types for Cloudflare Worker environment
 interface Env {
@@ -9,6 +10,9 @@ interface Env {
   SUPABASE_URL: string;
   SUPABASE_ANON_KEY: string;
   API_KEY: string;
+  // n8n webhook for the Campaigns tab (set via `wrangler secret put`).
+  N8N_WEBHOOK_URL?: string;
+  N8N_WEBHOOK_SECRET?: string;
 }
 
 // Serve static files (built React app)
@@ -573,6 +577,110 @@ async function handleAPI(request: Request, env: Env): Promise<Response> {
       }
 
       return new Response(JSON.stringify({ message: 'Token deleted successfully' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    // ========================================================================
+    // Email Campaigns ("Campaigns" tab) — mirrors the Express routes. Order
+    // matters: exact collection paths first, then /:id/launch, then /:id PATCH.
+    // ========================================================================
+    if (path === '/api/email-campaigns' && method === 'GET') {
+      const campaigns = await storageInstance.getEmailCampaigns();
+      return new Response(JSON.stringify(campaigns), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    if (path === '/api/email-campaigns' && method === 'POST') {
+      const body = await request.json() as any;
+      const validation = insertEmailCampaignSchema.safeParse(body);
+      if (!validation.success) {
+        return new Response(JSON.stringify({ message: 'Invalid campaign data', errors: validation.error.errors }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+      const created = await storageInstance.createEmailCampaign(validation.data);
+      return new Response(JSON.stringify(created), {
+        status: 201,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    if (path.startsWith('/api/email-campaigns/') && path.endsWith('/launch') && method === 'POST') {
+      const id = path.split('/')[3];
+      const campaign = await storageInstance.getEmailCampaign(id);
+      if (!campaign) {
+        return new Response(JSON.stringify({ message: 'Campaign not found' }), {
+          status: 404,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      if (!env.N8N_WEBHOOK_URL || !env.N8N_WEBHOOK_SECRET) {
+        return new Response(JSON.stringify({ message: "Campaign launching isn't configured yet. Add N8N_WEBHOOK_URL and N8N_WEBHOOK_SECRET." }), {
+          status: 503,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      const payload = buildLaunchPayload(campaign);
+      const result = await triggerN8nWebhook(env.N8N_WEBHOOK_URL, env.N8N_WEBHOOK_SECRET, payload);
+      if (!result.ok) {
+        return new Response(JSON.stringify({ message: result.message || 'n8n rejected the request', status: result.status }), {
+          status: 502,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      const updated = await storageInstance.markEmailCampaignLaunched(id);
+      return new Response(JSON.stringify({ message: result.message || 'Campaign launched', campaign: updated }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    if (path.startsWith('/api/email-campaigns/') && method === 'PATCH') {
+      const id = path.split('/')[3];
+      const body = await request.json() as any;
+      const validation = updateEmailCampaignSchema.safeParse(body);
+      if (!validation.success) {
+        return new Response(JSON.stringify({ message: 'Invalid campaign data', errors: validation.error.errors }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+      const updated = await storageInstance.updateEmailCampaign(id, validation.data);
+      if (!updated) {
+        return new Response(JSON.stringify({ message: 'Campaign not found' }), {
+          status: 404,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+      return new Response(JSON.stringify(updated), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    if (path === '/api/email-campaign-templates' && method === 'GET') {
+      const templates = await storageInstance.getEmailCampaignTemplates();
+      return new Response(JSON.stringify(templates), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    if (path === '/api/email-campaign-templates' && method === 'POST') {
+      const body = await request.json() as any;
+      const validation = insertEmailCampaignTemplateSchema.safeParse(body);
+      if (!validation.success) {
+        return new Response(JSON.stringify({ message: 'Invalid template data', errors: validation.error.errors }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+      const created = await storageInstance.createEmailCampaignTemplate(validation.data);
+      return new Response(JSON.stringify(created), {
+        status: 201,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }

@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type PromoCode, type InsertPromoCode, type ApiToken, type ApiTokenGenerate } from "@shared/schema";
+import { type User, type InsertUser, type PromoCode, type InsertPromoCode, type ApiToken, type ApiTokenGenerate, type EmailCampaign, type InsertEmailCampaign, type UpdateEmailCampaign, type EmailCampaignTemplate, type InsertEmailCampaignTemplate } from "@shared/schema";
 import { createClient } from '@supabase/supabase-js';
 import type { IStorage, PaginationOptions, PaginatedResult } from "./storage";
 
@@ -509,6 +509,166 @@ export class CloudflareStorage implements IStorage {
     if (error) {
       console.error('updateTokenLastUsed failed:', error);
     }
+  }
+
+  // ===== Email campaigns (Campaigns tab) =====
+  private mapEmailCampaignFromDb(r: any): EmailCampaign {
+    return {
+      id: r.id,
+      campaignName: r.campaign_name,
+      campaignType: r.campaign_type ?? null,
+      documentId: r.document_id,
+      documentId2: r.document_id_2 ?? null,
+      campaignInfoGid: r.campaign_info_gid,
+      mainScript: r.main_script ?? null,
+      followUps: r.follow_ups ?? [],
+      expiryDate: r.expiry_date ?? null,
+      notes: r.notes ?? null,
+      status: r.status,
+      lastLaunchedAt: r.last_launched_at ? new Date(r.last_launched_at) : null,
+      createdAt: new Date(r.created_at),
+    };
+  }
+
+  private mapEmailCampaignTemplateFromDb(r: any): EmailCampaignTemplate {
+    return {
+      id: r.id,
+      name: r.name,
+      campaignType: r.campaign_type ?? null,
+      documentId: r.document_id,
+      documentId2: r.document_id_2 ?? null,
+      campaignInfoGid: r.campaign_info_gid,
+      defaultMainScript: r.default_main_script ?? null,
+      defaultFollowUps: r.default_follow_ups ?? [],
+      notes: r.notes ?? null,
+      createdAt: new Date(r.created_at),
+    };
+  }
+
+  async getEmailCampaigns(): Promise<EmailCampaign[]> {
+    const { data, error } = await this.supabase
+      .from('email_campaigns')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (error) {
+      console.error('getEmailCampaigns failed:', error);
+      throw new Error(`Failed to fetch campaigns: ${error.message}`);
+    }
+    return (data || []).map((r: any) => this.mapEmailCampaignFromDb(r));
+  }
+
+  async getEmailCampaign(id: string): Promise<EmailCampaign | undefined> {
+    const { data, error } = await this.supabase
+      .from('email_campaigns')
+      .select('*')
+      .eq('id', id)
+      .single();
+    if (error && error.code !== 'PGRST116') {
+      console.error('getEmailCampaign failed:', error);
+      throw new Error(`Failed to fetch campaign: ${error.message}`);
+    }
+    return data ? this.mapEmailCampaignFromDb(data) : undefined;
+  }
+
+  async createEmailCampaign(data: InsertEmailCampaign): Promise<EmailCampaign> {
+    const { data: created, error } = await this.supabase
+      .from('email_campaigns')
+      .insert({
+        campaign_name: data.campaignName,
+        campaign_type: data.campaignType ?? null,
+        document_id: data.documentId,
+        document_id_2: data.documentId2 ?? null,
+        campaign_info_gid: data.campaignInfoGid,
+        main_script: data.mainScript ?? null,
+        follow_ups: data.followUps ?? [],
+        expiry_date: data.expiryDate ?? null,
+        notes: data.notes ?? null,
+        status: 'draft',
+      })
+      .select()
+      .single();
+    if (error) {
+      console.error('createEmailCampaign failed:', error);
+      throw new Error(`Failed to create campaign: ${error.message}`);
+    }
+    return this.mapEmailCampaignFromDb(created);
+  }
+
+  async updateEmailCampaign(id: string, data: UpdateEmailCampaign): Promise<EmailCampaign | undefined> {
+    const patch: Record<string, any> = {};
+    if (data.campaignName !== undefined) patch.campaign_name = data.campaignName;
+    if (data.campaignType !== undefined) patch.campaign_type = data.campaignType ?? null;
+    if (data.documentId !== undefined) patch.document_id = data.documentId;
+    if (data.documentId2 !== undefined) patch.document_id_2 = data.documentId2 ?? null;
+    if (data.campaignInfoGid !== undefined) patch.campaign_info_gid = data.campaignInfoGid;
+    if (data.mainScript !== undefined) patch.main_script = data.mainScript ?? null;
+    if (data.followUps !== undefined) patch.follow_ups = data.followUps ?? [];
+    if (data.expiryDate !== undefined) patch.expiry_date = data.expiryDate ?? null;
+    if (data.notes !== undefined) patch.notes = data.notes ?? null;
+
+    if (Object.keys(patch).length === 0) {
+      return this.getEmailCampaign(id);
+    }
+
+    const { data: updated, error } = await this.supabase
+      .from('email_campaigns')
+      .update(patch)
+      .eq('id', id)
+      .select()
+      .single();
+    if (error && error.code !== 'PGRST116') {
+      console.error('updateEmailCampaign failed:', error);
+      throw new Error(`Failed to update campaign: ${error.message}`);
+    }
+    return updated ? this.mapEmailCampaignFromDb(updated) : undefined;
+  }
+
+  async markEmailCampaignLaunched(id: string): Promise<EmailCampaign | undefined> {
+    const { data: updated, error } = await this.supabase
+      .from('email_campaigns')
+      .update({ status: 'launched', last_launched_at: new Date().toISOString() })
+      .eq('id', id)
+      .select()
+      .single();
+    if (error && error.code !== 'PGRST116') {
+      console.error('markEmailCampaignLaunched failed:', error);
+      throw new Error(`Failed to update campaign: ${error.message}`);
+    }
+    return updated ? this.mapEmailCampaignFromDb(updated) : undefined;
+  }
+
+  async getEmailCampaignTemplates(): Promise<EmailCampaignTemplate[]> {
+    const { data, error } = await this.supabase
+      .from('email_campaign_templates')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (error) {
+      console.error('getEmailCampaignTemplates failed:', error);
+      throw new Error(`Failed to fetch templates: ${error.message}`);
+    }
+    return (data || []).map((r: any) => this.mapEmailCampaignTemplateFromDb(r));
+  }
+
+  async createEmailCampaignTemplate(data: InsertEmailCampaignTemplate): Promise<EmailCampaignTemplate> {
+    const { data: created, error } = await this.supabase
+      .from('email_campaign_templates')
+      .insert({
+        name: data.name,
+        campaign_type: data.campaignType ?? null,
+        document_id: data.documentId,
+        document_id_2: data.documentId2 ?? null,
+        campaign_info_gid: data.campaignInfoGid,
+        default_main_script: data.defaultMainScript ?? null,
+        default_follow_ups: data.defaultFollowUps ?? [],
+        notes: data.notes ?? null,
+      })
+      .select()
+      .single();
+    if (error) {
+      console.error('createEmailCampaignTemplate failed:', error);
+      throw new Error(`Failed to create template: ${error.message}`);
+    }
+    return this.mapEmailCampaignTemplateFromDb(created);
   }
 }
 

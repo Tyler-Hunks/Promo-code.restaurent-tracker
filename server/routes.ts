@@ -1,9 +1,10 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertPromoCodeSchema, bulkGenerateSchema, campaignGenerateSchema, csvImportSchema, apiTokenGenerateSchema, deleteBulkByFiltersSchema, type BulkGenerate, type CampaignGenerate, type CsvImport, type ApiTokenGenerate } from "@shared/schema";
+import { insertPromoCodeSchema, bulkGenerateSchema, campaignGenerateSchema, csvImportSchema, apiTokenGenerateSchema, deleteBulkByFiltersSchema, insertEmailCampaignSchema, updateEmailCampaignSchema, insertEmailCampaignTemplateSchema, type BulkGenerate, type CampaignGenerate, type CsvImport, type ApiTokenGenerate } from "@shared/schema";
 import crypto from "crypto";
 import { z } from "zod";
+import { buildLaunchPayload, triggerN8nWebhook } from "./n8n";
 
 // Generate secure token
 function generateSecureToken(): string {
@@ -582,6 +583,100 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ message: 'Token deleted successfully' });
     } catch (error) {
       res.status(500).json({ message: 'Failed to delete token' });
+    }
+  });
+
+  // ===========================================================================
+  // Email Campaigns ("Campaigns" tab) — triggers external n8n cold-email flows.
+  // Namespaced under /api/email-campaigns so it never collides with the promo
+  // /api/campaigns and /api/campaigns/stats endpoints above.
+  // ===========================================================================
+  app.get("/api/email-campaigns", async (_req, res) => {
+    try {
+      const campaigns = await storage.getEmailCampaigns();
+      res.json(campaigns);
+    } catch (error) {
+      res.status(500).json({ message: error instanceof Error ? error.message : "Failed to fetch campaigns" });
+    }
+  });
+
+  app.post("/api/email-campaigns", async (req, res) => {
+    try {
+      const validation = insertEmailCampaignSchema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({ message: "Invalid campaign data", errors: validation.error.errors });
+      }
+      const created = await storage.createEmailCampaign(validation.data);
+      res.status(201).json(created);
+    } catch (error) {
+      res.status(500).json({ message: error instanceof Error ? error.message : "Failed to create campaign" });
+    }
+  });
+
+  app.patch("/api/email-campaigns/:id", async (req, res) => {
+    try {
+      const validation = updateEmailCampaignSchema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({ message: "Invalid campaign data", errors: validation.error.errors });
+      }
+      const updated = await storage.updateEmailCampaign(req.params.id, validation.data);
+      if (!updated) {
+        return res.status(404).json({ message: "Campaign not found" });
+      }
+      res.json(updated);
+    } catch (error) {
+      res.status(500).json({ message: error instanceof Error ? error.message : "Failed to update campaign" });
+    }
+  });
+
+  // Launch: fire the n8n webhook server-side (secret stays hidden), then mark launched.
+  app.post("/api/email-campaigns/:id/launch", async (req, res) => {
+    try {
+      const campaign = await storage.getEmailCampaign(req.params.id);
+      if (!campaign) {
+        return res.status(404).json({ message: "Campaign not found" });
+      }
+
+      const webhookUrl = process.env.N8N_WEBHOOK_URL;
+      const secret = process.env.N8N_WEBHOOK_SECRET;
+      if (!webhookUrl || !secret) {
+        return res.status(503).json({
+          message: "Campaign launching isn't configured yet. Add N8N_WEBHOOK_URL and N8N_WEBHOOK_SECRET.",
+        });
+      }
+
+      const payload = buildLaunchPayload(campaign);
+      const result = await triggerN8nWebhook(webhookUrl, secret, payload);
+      if (!result.ok) {
+        return res.status(502).json({ message: result.message || "n8n rejected the request", status: result.status });
+      }
+
+      const updated = await storage.markEmailCampaignLaunched(campaign.id);
+      res.json({ message: result.message || "Campaign launched", campaign: updated });
+    } catch (error) {
+      res.status(500).json({ message: error instanceof Error ? error.message : "Failed to launch campaign" });
+    }
+  });
+
+  app.get("/api/email-campaign-templates", async (_req, res) => {
+    try {
+      const templates = await storage.getEmailCampaignTemplates();
+      res.json(templates);
+    } catch (error) {
+      res.status(500).json({ message: error instanceof Error ? error.message : "Failed to fetch templates" });
+    }
+  });
+
+  app.post("/api/email-campaign-templates", async (req, res) => {
+    try {
+      const validation = insertEmailCampaignTemplateSchema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({ message: "Invalid template data", errors: validation.error.errors });
+      }
+      const created = await storage.createEmailCampaignTemplate(validation.data);
+      res.status(201).json(created);
+    } catch (error) {
+      res.status(500).json({ message: error instanceof Error ? error.message : "Failed to create template" });
     }
   });
 

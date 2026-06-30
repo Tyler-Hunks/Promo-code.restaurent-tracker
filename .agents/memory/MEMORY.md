@@ -1,4 +1,2 @@
-- [Cloudflare + Supabase ops runbook](cloudflare-supabase-ops.md) — deploy needs `npm run build` first; new Supabase DB needs `supabase-setup.sql` (tables + RPCs) or `/api/campaigns` 500s with error 1016.
-- [Auth dev/prod mirroring](auth-dev-prod-mirroring.md) — token auth (login, stateless verify, expiry) is duplicated in server/routes.ts (Express dev) and server/worker.ts (CF prod); change both in lockstep.
-- [Theming](theming.md) — main page hardcodes ~99 Tailwind color utilities; add themes via scoped `:root.theme-x` CSS overrides (keep status colors), and watch the dual-use `--secondary` token.
-- [Vite context import paths](vite-context-import-paths.md) — import shared modules (esp. React context) via ONE specifier; mixing `@/` and `./` for the same file loads it twice → "must be used within Provider".
+- [Dual server parity](dual-server-parity.md) — Express dev and Cloudflare Worker are separate backends; every new endpoint/storage method must be added to BOTH.
+- [Webhook response sanitization](webhook-response-sanitization.md) — never forward an external webhook's raw body/error to the client; it can leak the URL or secret header.

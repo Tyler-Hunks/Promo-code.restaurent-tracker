@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, boolean, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, boolean, timestamp, date } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -95,3 +95,76 @@ export type InsertApiToken = z.infer<typeof insertApiTokenSchema>;
 export type ApiToken = typeof apiTokens.$inferSelect;
 export type ApiTokenGenerate = z.infer<typeof apiTokenGenerateSchema>;
 export type DeleteBulkByFilters = z.infer<typeof deleteBulkByFiltersSchema>;
+
+// ===========================================================================
+// Email Campaigns ("Campaigns" tab) — triggers external n8n cold-email
+// workflows. Deliberately separate from the promo-code "campaign" concept
+// (promoCodes.campaignName) and the /api/campaigns/stats endpoint.
+// ===========================================================================
+export const emailCampaigns = pgTable("email_campaigns", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  campaignName: text("campaign_name").notNull(),
+  campaignType: text("campaign_type"),
+  documentId: text("document_id").notNull(),
+  documentId2: text("document_id_2"),
+  campaignInfoGid: text("campaign_info_gid").notNull(),
+  mainScript: text("main_script"),
+  followUps: text("follow_ups").array().notNull().default(sql`'{}'::text[]`),
+  expiryDate: date("expiry_date"),
+  notes: text("notes"),
+  status: text("status", { enum: ["draft", "launched"] }).notNull().default("draft"),
+  lastLaunchedAt: timestamp("last_launched_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const emailCampaignTemplates = pgTable("email_campaign_templates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  campaignType: text("campaign_type"),
+  documentId: text("document_id").notNull(),
+  documentId2: text("document_id_2"),
+  campaignInfoGid: text("campaign_info_gid").notNull(),
+  defaultMainScript: text("default_main_script"),
+  defaultFollowUps: text("default_follow_ups").array().notNull().default(sql`'{}'::text[]`),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertEmailCampaignSchema = createInsertSchema(emailCampaigns)
+  .omit({ id: true, status: true, lastLaunchedAt: true, createdAt: true })
+  .extend({
+    campaignName: z.string().min(1, "Campaign name is required"),
+    campaignType: z.string().optional().nullable(),
+    documentId: z.string().min(1, "Google Sheet Document ID is required"),
+    documentId2: z.string().optional().nullable(),
+    campaignInfoGid: z.string().min(1, "Campaign Info tab GID is required"),
+    mainScript: z.string().optional().nullable(),
+    followUps: z.array(z.string()).optional().default([]),
+    expiryDate: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, "Expiry date must be in YYYY-MM-DD format")
+      .optional()
+      .nullable(),
+    notes: z.string().optional().nullable(),
+  });
+
+export const updateEmailCampaignSchema = insertEmailCampaignSchema.partial();
+
+export const insertEmailCampaignTemplateSchema = createInsertSchema(emailCampaignTemplates)
+  .omit({ id: true, createdAt: true })
+  .extend({
+    name: z.string().min(1, "Template name is required"),
+    campaignType: z.string().optional().nullable(),
+    documentId: z.string().min(1, "Google Sheet Document ID is required"),
+    documentId2: z.string().optional().nullable(),
+    campaignInfoGid: z.string().min(1, "Campaign Info tab GID is required"),
+    defaultMainScript: z.string().optional().nullable(),
+    defaultFollowUps: z.array(z.string()).optional().default([]),
+    notes: z.string().optional().nullable(),
+  });
+
+export type EmailCampaign = typeof emailCampaigns.$inferSelect;
+export type InsertEmailCampaign = z.infer<typeof insertEmailCampaignSchema>;
+export type UpdateEmailCampaign = z.infer<typeof updateEmailCampaignSchema>;
+export type EmailCampaignTemplate = typeof emailCampaignTemplates.$inferSelect;
+export type InsertEmailCampaignTemplate = z.infer<typeof insertEmailCampaignTemplateSchema>;
