@@ -239,8 +239,10 @@ export const TOP_LEVEL_PLACEHOLDER_FIELDS = [
   "phone_number",
 ] as const;
 
-// The nested custom_fields.* keys. Scripts may reference these either bare
-// (e.g. {{Promo_Code}}) or dotted (e.g. {{custom_fields.Promo_Code}}).
+// The custom_fields.* keys. In a script these are referenced by their BARE name
+// only (e.g. {{Promo_Code}}). "custom_fields" is the upload grouping (for
+// Smartlead), NOT part of the placeholder token, so {{custom_fields.Promo_Code}}
+// is invalid and gets flagged red.
 export const CUSTOM_PLACEHOLDER_FIELDS = [
   "Position",
   "Promo_Code",
@@ -262,13 +264,13 @@ export const KNOWN_PLACEHOLDER_FIELDS = [
 ];
 
 // Matching is EXACT (case- and spelling-sensitive, only whitespace trimmed),
-// because n8n fills values by exact key: "{{Email}}", "{{Total_Cost}}" or
-// "{{first name}}" would NOT be filled and must be flagged. Custom fields may be
-// referenced bare or with a "custom_fields." prefix; top-level fields only bare.
+// because Smartlead/n8n fill values by exact key: "{{Email}}", "{{Total_Cost}}",
+// "{{first name}}" or "{{custom_fields.Promo_Code}}" would NOT be filled and must
+// be flagged. Every valid token is a BARE field name — the "custom_fields."
+// grouping is part of the upload, never part of the placeholder token.
 const KNOWN_PLACEHOLDER_SET = new Set<string>([
   ...TOP_LEVEL_PLACEHOLDER_FIELDS,
   ...CUSTOM_PLACEHOLDER_FIELDS,
-  ...CUSTOM_PLACEHOLDER_FIELDS.map((f) => `custom_fields.${f}`),
 ]);
 
 // True when a placeholder token maps to a supported lead field (see above).
