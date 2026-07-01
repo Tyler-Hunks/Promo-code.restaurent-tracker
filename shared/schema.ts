@@ -229,6 +229,53 @@ export function extractPlaceholders(texts: Array<string | null | undefined>): st
   return Array.from(found);
 }
 
+// The top-level lead fields n8n fills directly on each contact.
+export const TOP_LEVEL_PLACEHOLDER_FIELDS = [
+  "email",
+  "first_name",
+  "last_name",
+  "company_name",
+  "location",
+  "phone_number",
+] as const;
+
+// The nested custom_fields.* keys. Scripts may reference these either bare
+// (e.g. {{Promo_Code}}) or dotted (e.g. {{custom_fields.Promo_Code}}).
+export const CUSTOM_PLACEHOLDER_FIELDS = [
+  "Position",
+  "Promo_Code",
+  "Industry",
+  "Number_of_Employees",
+  "Total Cost",
+  "Directions",
+  "Organisation LinkedIn",
+  "Personal LinkedIn",
+  "Keywords",
+] as const;
+
+// Every supported placeholder name, for docs/UI. A {{ placeholder }} matching one
+// of these is "known"; anything else is flagged (shown red in the UI) so the user
+// spots it before launch. Missing fields are fine — a script needn't use them all.
+export const KNOWN_PLACEHOLDER_FIELDS = [
+  ...TOP_LEVEL_PLACEHOLDER_FIELDS,
+  ...CUSTOM_PLACEHOLDER_FIELDS,
+];
+
+// Matching is EXACT (case- and spelling-sensitive, only whitespace trimmed),
+// because n8n fills values by exact key: "{{Email}}", "{{Total_Cost}}" or
+// "{{first name}}" would NOT be filled and must be flagged. Custom fields may be
+// referenced bare or with a "custom_fields." prefix; top-level fields only bare.
+const KNOWN_PLACEHOLDER_SET = new Set<string>([
+  ...TOP_LEVEL_PLACEHOLDER_FIELDS,
+  ...CUSTOM_PLACEHOLDER_FIELDS,
+  ...CUSTOM_PLACEHOLDER_FIELDS.map((f) => `custom_fields.${f}`),
+]);
+
+// True when a placeholder token maps to a supported lead field (see above).
+export function isKnownPlaceholder(token: string): boolean {
+  return KNOWN_PLACEHOLDER_SET.has(token.trim());
+}
+
 export type EmailCampaign = typeof emailCampaigns.$inferSelect;
 export type InsertEmailCampaign = z.infer<typeof insertEmailCampaignSchema>;
 export type UpdateEmailCampaign = z.infer<typeof updateEmailCampaignSchema>;

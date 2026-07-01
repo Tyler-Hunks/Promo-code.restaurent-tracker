@@ -266,3 +266,9 @@ DROP POLICY IF EXISTS "Allow all operations" ON email_campaign_launches;
 CREATE POLICY "Allow all operations" ON email_campaigns FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all operations" ON email_campaign_templates FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all operations" ON email_campaign_launches FOR ALL USING (true) WITH CHECK (true);
+
+-- Tell Supabase's API layer (PostgREST) to reload its cached schema. Without
+-- this, freshly added columns (e.g. default_main_scripts) can report
+-- "Could not find the '<col>' column ... in the schema cache" from the deployed
+-- Cloudflare Worker until the cache refreshes. Safe to run every time.
+NOTIFY pgrst, 'reload schema';

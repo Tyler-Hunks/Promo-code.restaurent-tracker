@@ -7,6 +7,7 @@ import {
   type EmailCampaignTemplate,
   type EmailCampaignLaunch,
   extractPlaceholders,
+  isKnownPlaceholder,
   buildLaunchPayload,
   LIST_LABELS,
 } from "@shared/schema";
@@ -218,18 +219,34 @@ function PlaceholderChips({
       </p>
     );
   }
+  const unknown = tokens.filter((t) => !isKnownPlaceholder(t));
   return (
-    <div className="flex flex-wrap gap-1.5" data-testid={testId}>
-      {tokens.map((t) => (
-        <Badge
-          key={t}
-          variant="secondary"
-          className="font-mono text-xs"
-          data-testid={`chip-placeholder-${t}`}
-        >
-          {`{{${t}}}`}
-        </Badge>
-      ))}
+    <div className="space-y-1.5">
+      <div className="flex flex-wrap gap-1.5" data-testid={testId}>
+        {tokens.map((t) => {
+          const known = isKnownPlaceholder(t);
+          return (
+            <Badge
+              key={t}
+              variant={known ? "secondary" : "destructive"}
+              className="font-mono text-xs"
+              title={
+                known
+                  ? undefined
+                  : "Not a recognised lead field — check the spelling or it won't be filled in."
+              }
+              data-testid={`chip-placeholder-${t}`}
+            >
+              {`{{${t}}}`}
+            </Badge>
+          );
+        })}
+      </div>
+      {unknown.length > 0 && (
+        <p className="text-xs text-destructive" data-testid={`${testId}-unknown-warning`}>
+          Placeholders in red aren't recognised lead fields, so they won't be filled in — check the spelling.
+        </p>
+      )}
     </div>
   );
 }
