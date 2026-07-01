@@ -2,7 +2,7 @@
 import { storage } from "./storage-cloudflare";
 import { insertPromoCodeSchema, bulkGenerateSchema, apiTokenGenerateSchema, deleteBulkByFiltersSchema, insertEmailCampaignSchema, updateEmailCampaignSchema, insertEmailCampaignTemplateSchema } from "../shared/schema";
 import { z } from "zod";
-import { buildLaunchPayload, triggerN8nWebhook } from "./n8n";
+import { buildLaunchRequestBody, triggerN8nWebhook } from "./n8n";
 
 // Types for Cloudflare Worker environment
 interface Env {
@@ -636,7 +636,18 @@ async function handleAPI(request: Request, env: Env): Promise<Response> {
         });
       }
 
-      const payload = buildLaunchPayload(campaign);
+      // There must be at least one non-empty main-script variant (Variant A),
+      // otherwise the payload's `lists` would be empty and n8n would email nobody.
+      if (!campaign.mainScripts?.some((s) => s?.trim())) {
+        return new Response(JSON.stringify({
+          message: "Add at least the Variant A main script before launching, so there's a message to send.",
+        }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      const payload = buildLaunchRequestBody(campaign);
       const result = await triggerN8nWebhook(env.N8N_WEBHOOK_URL, env.N8N_WEBHOOK_SECRET, payload);
 
       // Record every launch attempt (success OR failure) in the history.

@@ -519,7 +519,7 @@ export class CloudflareStorage implements IStorage {
       campaignType: r.campaign_type ?? null,
       documentId: r.document_id,
       sheetIds: r.sheet_ids ?? [],
-      mainScript: r.main_script ?? null,
+      mainScripts: r.main_scripts ?? [],
       followUps: r.follow_ups ?? [],
       expiryDate: r.expiry_date ?? null,
       notes: r.notes ?? null,
@@ -536,7 +536,7 @@ export class CloudflareStorage implements IStorage {
       campaignType: r.campaign_type ?? null,
       documentId: r.document_id ?? null,
       sheetIds: r.sheet_ids ?? [],
-      defaultMainScript: r.default_main_script ?? null,
+      defaultMainScripts: r.default_main_scripts ?? [],
       defaultFollowUps: r.default_follow_ups ?? [],
       notes: r.notes ?? null,
       createdAt: new Date(r.created_at),
@@ -587,7 +587,7 @@ export class CloudflareStorage implements IStorage {
         campaign_type: data.campaignType ?? null,
         document_id: data.documentId,
         sheet_ids: data.sheetIds ?? [],
-        main_script: data.mainScript ?? null,
+        main_scripts: data.mainScripts ?? [],
         follow_ups: data.followUps ?? [],
         expiry_date: data.expiryDate ?? null,
         notes: data.notes ?? null,
@@ -608,7 +608,7 @@ export class CloudflareStorage implements IStorage {
     if (data.campaignType !== undefined) patch.campaign_type = data.campaignType ?? null;
     if (data.documentId !== undefined) patch.document_id = data.documentId;
     if (data.sheetIds !== undefined) patch.sheet_ids = data.sheetIds ?? [];
-    if (data.mainScript !== undefined) patch.main_script = data.mainScript ?? null;
+    if (data.mainScripts !== undefined) patch.main_scripts = data.mainScripts ?? [];
     if (data.followUps !== undefined) patch.follow_ups = data.followUps ?? [];
     if (data.expiryDate !== undefined) patch.expiry_date = data.expiryDate ?? null;
     if (data.notes !== undefined) patch.notes = data.notes ?? null;
@@ -664,7 +664,7 @@ export class CloudflareStorage implements IStorage {
         campaign_type: data.campaignType ?? null,
         document_id: data.documentId ?? null,
         sheet_ids: data.sheetIds ?? [],
-        default_main_script: data.defaultMainScript ?? null,
+        default_main_scripts: data.defaultMainScripts ?? [],
         default_follow_ups: data.defaultFollowUps ?? [],
         notes: data.notes ?? null,
       })

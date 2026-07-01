@@ -1,20 +1,13 @@
-import { type EmailCampaign, extractPlaceholders } from "../shared/schema";
+import { type EmailCampaign, buildLaunchPayload } from "../shared/schema";
 
-// Builds the exact JSON body POSTed to the n8n webhook when a campaign launches.
-// Shared by the Express dev server (routes.ts) and the Cloudflare Worker
-// (worker.ts) so the payload shape never drifts between environments.
-export function buildLaunchPayload(campaign: EmailCampaign) {
+// The exact JSON body POSTed to the n8n webhook when a campaign launches. The
+// payload shape itself lives in shared/schema.ts (buildLaunchPayload) so the
+// dev server, the Cloudflare Worker, and the frontend preview never drift. Here
+// we only add the server-side `triggeredAt` stamp (the frontend preview omits
+// it since it isn't known until the launch actually fires).
+export function buildLaunchRequestBody(campaign: EmailCampaign) {
   return {
-    campaignId: campaign.id,
-    campaignName: campaign.campaignName,
-    campaignType: campaign.campaignType ?? null,
-    documentId: campaign.documentId,
-    sheetIds: campaign.sheetIds ?? [],
-    mainScript: campaign.mainScript ?? null,
-    followUps: campaign.followUps ?? [],
-    // The {{tokens}} found in the scripts, so n8n knows which variables to fill.
-    placeholders: extractPlaceholders(campaign),
-    expiryDate: campaign.expiryDate ?? null,
+    ...buildLaunchPayload(campaign),
     triggeredAt: new Date().toISOString(),
   };
 }

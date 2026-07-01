@@ -127,7 +127,7 @@ CREATE TABLE IF NOT EXISTS email_campaigns (
     campaign_type TEXT,
     document_id TEXT NOT NULL,
     sheet_ids TEXT[] NOT NULL DEFAULT '{}',
-    main_script TEXT,
+    main_scripts TEXT[] NOT NULL DEFAULT '{}',
     follow_ups TEXT[] NOT NULL DEFAULT '{}',
     expiry_date DATE,
     notes TEXT,
@@ -142,7 +142,7 @@ CREATE TABLE IF NOT EXISTS email_campaign_templates (
     campaign_type TEXT,
     document_id TEXT,
     sheet_ids TEXT[] NOT NULL DEFAULT '{}',
-    default_main_script TEXT,
+    default_main_scripts TEXT[] NOT NULL DEFAULT '{}',
     default_follow_ups TEXT[] NOT NULL DEFAULT '{}',
     notes TEXT,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
@@ -205,6 +205,47 @@ ALTER TABLE email_campaigns DROP COLUMN IF EXISTS campaign_info_gid;
 ALTER TABLE email_campaign_templates DROP COLUMN IF EXISTS document_id_2;
 ALTER TABLE email_campaign_templates DROP COLUMN IF EXISTS campaign_info_gid;
 ALTER TABLE email_campaign_templates ALTER COLUMN document_id DROP NOT NULL;
+
+-- 4) A/B main-script variants: the single main_script / default_main_script
+--    columns become arrays (main_scripts / default_main_scripts), where index 0
+--    is Variant A and index 1 is Variant B. Same safe pattern as above:
+--    add the new array column, backfill the old single value into it BEFORE
+--    dropping the old column, and only fill empty arrays so re-runs are safe.
+ALTER TABLE email_campaigns ADD COLUMN IF NOT EXISTS main_scripts TEXT[] NOT NULL DEFAULT '{}';
+ALTER TABLE email_campaign_templates ADD COLUMN IF NOT EXISTS default_main_scripts TEXT[] NOT NULL DEFAULT '{}';
+
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'email_campaigns' AND column_name = 'main_script'
+  ) THEN
+    EXECUTE $sql$
+      UPDATE email_campaigns
+      SET main_scripts = ARRAY[main_script]
+      WHERE COALESCE(cardinality(main_scripts), 0) = 0
+        AND main_script IS NOT NULL
+        AND main_script <> ''
+    $sql$;
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'email_campaign_templates' AND column_name = 'default_main_script'
+  ) THEN
+    EXECUTE $sql$
+      UPDATE email_campaign_templates
+      SET default_main_scripts = ARRAY[default_main_script]
+      WHERE COALESCE(cardinality(default_main_scripts), 0) = 0
+        AND default_main_script IS NOT NULL
+        AND default_main_script <> ''
+    $sql$;
+  END IF;
+END $$;
+
+-- 5) Now that any script data is preserved, drop the obsolete single columns.
+ALTER TABLE email_campaigns DROP COLUMN IF EXISTS main_script;
+ALTER TABLE email_campaign_templates DROP COLUMN IF EXISTS default_main_script;
 
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_email_campaigns_created_at ON email_campaigns(created_at);

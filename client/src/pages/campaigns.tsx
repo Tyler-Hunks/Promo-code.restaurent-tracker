@@ -7,6 +7,8 @@ import {
   type EmailCampaignTemplate,
   type EmailCampaignLaunch,
   extractPlaceholders,
+  buildLaunchPayload,
+  LIST_LABELS,
 } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -199,23 +201,25 @@ function SearchBox({
 }
 
 function PlaceholderChips({
-  mainScript,
-  followUps,
+  texts,
+  testId = "placeholder-chips",
+  emptyHint = true,
 }: {
-  mainScript: string;
-  followUps: string[];
+  texts: Array<string | null | undefined>;
+  testId?: string;
+  emptyHint?: boolean;
 }) {
-  const tokens = extractPlaceholders({ mainScript, followUps });
+  const tokens = extractPlaceholders(texts);
   if (tokens.length === 0) {
+    if (!emptyHint) return null;
     return (
       <p className="text-xs text-muted-foreground">
-        No placeholders detected yet. Use {"{{ name }}"} style tokens in your scripts and
-        they'll show up here.
+        No placeholders detected yet. Use {"{{ name }}"} style tokens and they'll show up here.
       </p>
     );
   }
   return (
-    <div className="flex flex-wrap gap-1.5" data-testid="placeholder-chips">
+    <div className="flex flex-wrap gap-1.5" data-testid={testId}>
       {tokens.map((t) => (
         <Badge
           key={t}
@@ -226,6 +230,96 @@ function PlaceholderChips({
           {`{{${t}}}`}
         </Badge>
       ))}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Main-script variants editor (A/B). Up to 2 variants, tied by position to the
+// Sheet IDs: Variant A → "A YL", Variant B → "B NL". Each shows its own
+// detected placeholders. Shared between campaign + template forms.
+// ---------------------------------------------------------------------------
+function MainScriptsEditor({
+  value,
+  onChange,
+  idPrefix,
+}: {
+  value: string[];
+  onChange: (v: string[]) => void;
+  idPrefix: string;
+}) {
+  // Always show at least Variant A so there's somewhere to type.
+  const variants = value.length === 0 ? [""] : value;
+
+  const setAt = (i: number, text: string) => {
+    const next = [...variants];
+    next[i] = text;
+    onChange(next);
+  };
+
+  return (
+    <div className="space-y-3">
+      {variants.map((v, i) => {
+        const label = i === 0 ? "Variant A" : "Variant B";
+        const sheetLabel = LIST_LABELS[i] ?? `Sheet #${i + 1}`;
+        return (
+          <div key={i} className="rounded-md border p-3 space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <Label
+                htmlFor={`${idPrefix}-variant-${i}`}
+                className="text-xs font-medium"
+              >
+                {label}{" "}
+                <span className="text-muted-foreground font-normal">
+                  → sends to Sheet “{sheetLabel}”
+                </span>
+              </Label>
+              {i > 0 && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={() => onChange(variants.filter((_, idx) => idx !== i))}
+                  data-testid={`button-remove-variant-${i}`}
+                  title="Remove Variant B"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
+            <Textarea
+              id={`${idPrefix}-variant-${i}`}
+              value={v}
+              onChange={(e) => setAt(i, e.target.value)}
+              placeholder={
+                i === 0
+                  ? "The first email message… use {{ name }} for variables."
+                  : "The Variant B message (A/B test)… use {{ name }} for variables."
+              }
+              rows={4}
+              data-testid={`input-main-script-${i}`}
+            />
+            <PlaceholderChips
+              texts={[v]}
+              testId={`placeholder-chips-variant-${i}`}
+              emptyHint={false}
+            />
+          </div>
+        );
+      })}
+      {variants.length < 2 && (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => onChange([...variants, ""])}
+          data-testid="button-add-variant"
+        >
+          <Plus className="h-4 w-4 mr-2" />
+          Add Variant B
+        </Button>
+      )}
     </div>
   );
 }
@@ -246,28 +340,35 @@ function FollowUpsEditor({
         <p className="text-sm text-muted-foreground">No follow-up messages yet.</p>
       )}
       {value.map((f, i) => (
-        <div key={i} className="flex gap-2 items-start">
-          <Textarea
-            value={f}
-            onChange={(e) => {
-              const next = [...value];
-              next[i] = e.target.value;
-              onChange(next);
-            }}
-            placeholder={`Follow-up message #${i + 1}`}
-            rows={2}
-            data-testid={`input-followup-${i}`}
+        <div key={i} className="rounded-md border p-3 space-y-2">
+          <div className="flex gap-2 items-start">
+            <Textarea
+              value={f}
+              onChange={(e) => {
+                const next = [...value];
+                next[i] = e.target.value;
+                onChange(next);
+              }}
+              placeholder={`Follow-up message #${i + 1}`}
+              rows={2}
+              data-testid={`input-followup-${i}`}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              onClick={() => onChange(value.filter((_, idx) => idx !== i))}
+              data-testid={`button-remove-followup-${i}`}
+              title="Remove follow-up"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
+          <PlaceholderChips
+            texts={[f]}
+            testId={`placeholder-chips-followup-${i}`}
+            emptyHint={false}
           />
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            onClick={() => onChange(value.filter((_, idx) => idx !== i))}
-            data-testid={`button-remove-followup-${i}`}
-            title="Remove follow-up"
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
         </div>
       ))}
       <Button
@@ -302,20 +403,26 @@ function SheetIdsEditor({
       {value.map((s, i) => {
         const trimmed = s.trim();
         const invalid = trimmed !== "" && !/^\d+$/.test(trimmed);
+        const listLabel = LIST_LABELS[i] ?? `Sheet #${i + 1}`;
         return (
           <div key={i} className="flex gap-2 items-start">
             <div className="flex-1">
-              <Input
-                value={s}
-                onChange={(e) => {
-                  const next = [...value];
-                  next[i] = e.target.value;
-                  onChange(next);
-                }}
-                placeholder={`Sheet ID (gid) #${i + 1}, e.g. 0`}
-                className={invalid ? "border-destructive" : ""}
-                data-testid={`input-sheetid-${i}`}
-              />
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="shrink-0 font-mono text-xs">
+                  {listLabel}
+                </Badge>
+                <Input
+                  value={s}
+                  onChange={(e) => {
+                    const next = [...value];
+                    next[i] = e.target.value;
+                    onChange(next);
+                  }}
+                  placeholder={`gid for “${listLabel}”, e.g. 0`}
+                  className={invalid ? "border-destructive" : ""}
+                  data-testid={`input-sheetid-${i}`}
+                />
+              </div>
               {invalid && (
                 <p className="text-xs text-destructive mt-1">
                   Must be a number — the gid from the sheet tab URL.
@@ -357,10 +464,18 @@ interface CampaignFormState {
   campaignType: string;
   documentId: string;
   sheetIds: string[];
-  mainScript: string;
+  mainScripts: string[];
   followUps: string[];
   expiryDate: string;
   notes: string;
+}
+
+// Trims variants and drops trailing empties, but keeps internal positions so
+// Variant A stays at index 0 and Variant B at index 1 (pairing with the sheets).
+function normalizeVariants(variants: string[]): string[] {
+  const out = variants.map((s) => s.trim());
+  while (out.length > 0 && out[out.length - 1] === "") out.pop();
+  return out;
 }
 
 function emptyCampaignState(): CampaignFormState {
@@ -369,7 +484,7 @@ function emptyCampaignState(): CampaignFormState {
     campaignType: "",
     documentId: "",
     sheetIds: ["", ""],
-    mainScript: "",
+    mainScripts: [""],
     followUps: [],
     expiryDate: "",
     notes: "",
@@ -378,12 +493,13 @@ function emptyCampaignState(): CampaignFormState {
 
 function stateFromCampaign(c: EmailCampaign): CampaignFormState {
   const sheetIds = c.sheetIds && c.sheetIds.length > 0 ? [...c.sheetIds] : ["", ""];
+  const mainScripts = c.mainScripts && c.mainScripts.length > 0 ? [...c.mainScripts] : [""];
   return {
     campaignName: c.campaignName ?? "",
     campaignType: c.campaignType ?? "",
     documentId: c.documentId ?? "",
     sheetIds,
-    mainScript: c.mainScript ?? "",
+    mainScripts,
     followUps: c.followUps ?? [],
     expiryDate: c.expiryDate ?? "",
     notes: c.notes ?? "",
@@ -396,9 +512,9 @@ function buildCampaignPayload(state: CampaignFormState) {
     campaignType: state.campaignType.trim() || null,
     documentId: state.documentId.trim(),
     sheetIds: state.sheetIds.map((s) => s.trim()).filter(Boolean),
-    mainScript: state.mainScript.trim() || null,
+    mainScripts: normalizeVariants(state.mainScripts),
     followUps: state.followUps.map((f) => f.trim()).filter(Boolean),
-    expiryDate: state.expiryDate || null,
+    expiryDate: state.expiryDate.trim() || null,
     notes: state.notes.trim() || null,
   };
 }
@@ -431,7 +547,10 @@ function CampaignForm({
       campaignType: t.campaignType ?? "",
       documentId: t.documentId ?? "",
       sheetIds: t.sheetIds && t.sheetIds.length > 0 ? [...t.sheetIds] : ["", ""],
-      mainScript: t.defaultMainScript ?? "",
+      mainScripts:
+        t.defaultMainScripts && t.defaultMainScripts.length > 0
+          ? [...t.defaultMainScripts]
+          : [""],
       followUps: t.defaultFollowUps ?? [],
       notes: t.notes ?? "",
     });
@@ -461,6 +580,20 @@ function CampaignForm({
     }
     if (sheetIds.some((s) => !/^\d+$/.test(s))) {
       setError("Each Sheet ID (gid) must be a number, e.g. 0 or 123456789.");
+      return;
+    }
+    const variants = normalizeVariants(state.mainScripts);
+    if (variants.length === 0) {
+      setError("Add at least the Variant A main script.");
+      return;
+    }
+    if (variants.some((v) => v === "")) {
+      setError("Variant A can't be empty when Variant B is filled in. Fill in Variant A or remove Variant B.");
+      return;
+    }
+    const expiry = state.expiryDate.trim();
+    if (expiry && !/^\d{4}-\d{2}-\d{2}$/.test(expiry)) {
+      setError("Expiry date must be in YYYY-MM-DD format, e.g. 2026-12-31, or left blank.");
       return;
     }
     setError("");
@@ -536,19 +669,20 @@ function CampaignForm({
       </div>
 
       <div className="space-y-1.5">
-        <Label htmlFor="mainScript">Main script</Label>
-        <Textarea
-          id="mainScript"
-          value={state.mainScript}
-          onChange={(e) => update({ mainScript: e.target.value })}
-          placeholder="The first email message… use {{ name }} for variables."
-          rows={4}
-          data-testid="input-main-script"
+        <Label>Main script (A/B variants)</Label>
+        <p className="text-xs text-muted-foreground">
+          Variant A always sends. Add Variant B to A/B test — it sends to the second
+          sheet ("{LIST_LABELS[1]}") while Variant A sends to the first ("{LIST_LABELS[0]}").
+        </p>
+        <MainScriptsEditor
+          value={state.mainScripts}
+          onChange={(mainScripts) => update({ mainScripts })}
+          idPrefix="campaign"
         />
       </div>
 
       <div className="space-y-1.5">
-        <Label>Follow-up messages</Label>
+        <Label>Follow-up messages (shared by both variants)</Label>
         <FollowUpsEditor
           value={state.followUps}
           onChange={(followUps) => update({ followUps })}
@@ -557,20 +691,26 @@ function CampaignForm({
 
       <div className="space-y-1.5 rounded-md border p-3 bg-muted/30">
         <Label className="text-xs uppercase tracking-wide text-muted-foreground">
-          Placeholders detected
+          All placeholders detected (whole campaign)
         </Label>
-        <PlaceholderChips mainScript={state.mainScript} followUps={state.followUps} />
+        <PlaceholderChips texts={[...state.mainScripts, ...state.followUps]} />
       </div>
 
       <div className="space-y-1.5">
         <Label htmlFor="expiryDate">Expiry date</Label>
         <Input
           id="expiryDate"
-          type="date"
+          type="text"
+          inputMode="numeric"
           value={state.expiryDate}
           onChange={(e) => update({ expiryDate: e.target.value })}
+          placeholder="YYYY-MM-DD (leave blank for none)"
           data-testid="input-expiry-date"
         />
+        <p className="text-xs text-muted-foreground">
+          Type a date like 2026-12-31, or leave blank. It's sent as a Unix timestamp
+          (seconds).
+        </p>
       </div>
 
       <div className="space-y-1.5">
@@ -609,7 +749,7 @@ interface TemplateFormState {
   campaignType: string;
   documentId: string;
   sheetIds: string[];
-  defaultMainScript: string;
+  defaultMainScripts: string[];
   defaultFollowUps: string[];
   notes: string;
 }
@@ -626,7 +766,7 @@ function TemplateForm({
     campaignType: "",
     documentId: "",
     sheetIds: [],
-    defaultMainScript: "",
+    defaultMainScripts: [""],
     defaultFollowUps: [],
     notes: "",
   });
@@ -653,13 +793,18 @@ function TemplateForm({
       setError("Each Sheet ID (gid) must be a number.");
       return;
     }
+    const defaultMainScripts = normalizeVariants(state.defaultMainScripts);
+    if (defaultMainScripts.some((v) => v === "")) {
+      setError("Variant A can't be empty when Variant B is filled in. Fill in Variant A or remove Variant B.");
+      return;
+    }
     setError("");
     onSubmit({
       name,
       campaignType: state.campaignType.trim() || null,
       documentId: doc || null,
       sheetIds,
-      defaultMainScript: state.defaultMainScript.trim() || null,
+      defaultMainScripts,
       defaultFollowUps: state.defaultFollowUps.map((f) => f.trim()).filter(Boolean),
       notes: state.notes.trim() || null,
     });
@@ -706,13 +851,11 @@ function TemplateForm({
         />
       </div>
       <div className="space-y-1.5">
-        <Label htmlFor="tplScript">Default main script</Label>
-        <Textarea
-          id="tplScript"
-          value={state.defaultMainScript}
-          onChange={(e) => update({ defaultMainScript: e.target.value })}
-          rows={4}
-          data-testid="input-template-main-script"
+        <Label>Default main script (A/B variants)</Label>
+        <MainScriptsEditor
+          value={state.defaultMainScripts}
+          onChange={(defaultMainScripts) => update({ defaultMainScripts })}
+          idPrefix="template"
         />
       </div>
       <div className="space-y-1.5">
@@ -750,20 +893,11 @@ function TemplateForm({
 }
 
 // ---------------------------------------------------------------------------
-// Launch payload preview (mirrors server/n8n.ts buildLaunchPayload)
+// Launch payload preview — uses the exact same builder the server does, so the
+// preview always matches what n8n receives (minus the auto-added triggeredAt).
 // ---------------------------------------------------------------------------
 function previewPayload(c: EmailCampaign) {
-  return {
-    campaignId: c.id,
-    campaignName: c.campaignName,
-    campaignType: c.campaignType ?? null,
-    documentId: c.documentId,
-    sheetIds: c.sheetIds ?? [],
-    mainScript: c.mainScript ?? null,
-    followUps: c.followUps ?? [],
-    placeholders: extractPlaceholders({ mainScript: c.mainScript, followUps: c.followUps }),
-    expiryDate: c.expiryDate ?? null,
-  };
+  return buildLaunchPayload(c);
 }
 
 interface LaunchResult {
@@ -932,7 +1066,7 @@ export default function Campaigns() {
       campaignType: t.campaignType ?? null,
       documentId: t.documentId ?? "",
       sheetIds: t.sheetIds ?? [],
-      mainScript: t.defaultMainScript ?? null,
+      mainScripts: t.defaultMainScripts ?? [],
       followUps: t.defaultFollowUps ?? [],
       expiryDate: null,
       notes: t.notes ?? null,
@@ -1117,10 +1251,10 @@ export default function Campaigns() {
                 {campaignsPaged.slice.map((c) => {
                   const isLaunching =
                     launchMutation.isPending && launchMutation.variables === c.id;
-                  const placeholders = extractPlaceholders({
-                    mainScript: c.mainScript,
-                    followUps: c.followUps,
-                  });
+                  const placeholders = extractPlaceholders([
+                    ...(c.mainScripts ?? []),
+                    ...(c.followUps ?? []),
+                  ]);
                   return (
                     <Card key={c.id} data-testid={`card-campaign-${c.id}`}>
                       <CardHeader className="pb-3">

@@ -4,7 +4,7 @@ import { storage } from "./storage";
 import { insertPromoCodeSchema, bulkGenerateSchema, campaignGenerateSchema, csvImportSchema, apiTokenGenerateSchema, deleteBulkByFiltersSchema, insertEmailCampaignSchema, updateEmailCampaignSchema, insertEmailCampaignTemplateSchema, type BulkGenerate, type CampaignGenerate, type CsvImport, type ApiTokenGenerate } from "@shared/schema";
 import crypto from "crypto";
 import { z } from "zod";
-import { buildLaunchPayload, triggerN8nWebhook } from "./n8n";
+import { buildLaunchRequestBody, triggerN8nWebhook } from "./n8n";
 
 // Generate secure token
 function generateSecureToken(): string {
@@ -654,7 +654,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      const payload = buildLaunchPayload(campaign);
+      // There must be at least one non-empty main-script variant (Variant A),
+      // otherwise the payload's `lists` would be empty and n8n would email nobody.
+      if (!campaign.mainScripts?.some((s) => s?.trim())) {
+        return res.status(400).json({
+          message:
+            "Add at least the Variant A main script before launching, so there's a message to send.",
+        });
+      }
+
+      const payload = buildLaunchRequestBody(campaign);
       const result = await triggerN8nWebhook(webhookUrl, secret, payload);
 
       // Record every launch attempt (success OR failure) in the history.

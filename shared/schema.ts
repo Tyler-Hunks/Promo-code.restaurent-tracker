@@ -108,8 +108,12 @@ export const emailCampaigns = pgTable("email_campaigns", {
   // One Google Sheet file (the Document ID) holding the campaign's lead tabs.
   documentId: text("document_id").notNull(),
   // The tab gids inside that document (at least 2 — e.g. lead lists).
+  // Tied to the main-script variants by position: sheetIds[0] = "A YL" ↔
+  // Variant A, sheetIds[1] = "B NL" ↔ Variant B.
   sheetIds: text("sheet_ids").array().notNull().default(sql`'{}'::text[]`),
-  mainScript: text("main_script"),
+  // Up to 2 main-script variants (A, B) for A/B testing. Index 0 = Variant A,
+  // index 1 = Variant B. Each pairs with the same-index Sheet ID.
+  mainScripts: text("main_scripts").array().notNull().default(sql`'{}'::text[]`),
   followUps: text("follow_ups").array().notNull().default(sql`'{}'::text[]`),
   expiryDate: date("expiry_date"),
   notes: text("notes"),
@@ -125,7 +129,8 @@ export const emailCampaignTemplates = pgTable("email_campaign_templates", {
   // Optional on a template — you may reuse just the scripts.
   documentId: text("document_id"),
   sheetIds: text("sheet_ids").array().notNull().default(sql`'{}'::text[]`),
-  defaultMainScript: text("default_main_script"),
+  // Up to 2 default main-script variants (A, B), same as email_campaigns.
+  defaultMainScripts: text("default_main_scripts").array().notNull().default(sql`'{}'::text[]`),
   defaultFollowUps: text("default_follow_ups").array().notNull().default(sql`'{}'::text[]`),
   notes: text("notes"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -153,6 +158,20 @@ const sheetIdsField = z
   )
   .min(2, "Add at least 2 Sheet IDs (gids)");
 
+// Up to 2 A/B main-script variants (index 0 = Variant A, index 1 = Variant B).
+// Variant A must be filled before Variant B, so an empty A can never be paired
+// with a filled B — this keeps the index→sheet pairing meaningful and matches
+// the frontend rule for direct API clients too.
+const variantsField = z
+  .array(z.string())
+  .max(2, "At most 2 main-script variants (A and B)")
+  .optional()
+  .default([])
+  .refine(
+    (arr) => !arr.slice(1).some((s) => s?.trim()) || Boolean(arr[0]?.trim()),
+    { message: "Fill in Variant A before adding Variant B" },
+  );
+
 export const insertEmailCampaignSchema = createInsertSchema(emailCampaigns)
   .omit({ id: true, status: true, lastLaunchedAt: true, createdAt: true })
   .extend({
@@ -160,7 +179,7 @@ export const insertEmailCampaignSchema = createInsertSchema(emailCampaigns)
     campaignType: z.string().optional().nullable(),
     documentId: documentIdField,
     sheetIds: sheetIdsField,
-    mainScript: z.string().optional().nullable(),
+    mainScripts: variantsField,
     followUps: z.array(z.string()).optional().default([]),
     expiryDate: z
       .string()
@@ -182,7 +201,7 @@ export const insertEmailCampaignTemplateSchema = createInsertSchema(emailCampaig
       .array(z.string().regex(/^\d+$/, "Each Sheet ID (gid) should be a number"))
       .optional()
       .default([]),
-    defaultMainScript: z.string().optional().nullable(),
+    defaultMainScripts: variantsField,
     defaultFollowUps: z.array(z.string()).optional().default([]),
     notes: z.string().optional().nullable(),
   });
@@ -192,17 +211,15 @@ export const insertEmailCampaignLaunchSchema = createInsertSchema(emailCampaignL
   launchedAt: true,
 });
 
-// Finds every {{ placeholder }} token used across a campaign's scripts so the UI
-// can show which variables n8n must fill, and so they can ride along in the
-// launch payload. Shared by the frontend (live chips) and backend (payload).
-export function extractPlaceholders(input: {
-  mainScript?: string | null;
-  followUps?: string[] | null;
-}): string[] {
-  const texts = [input.mainScript ?? "", ...(input.followUps ?? [])];
+// Finds every {{ placeholder }} token used across the given texts so the UI can
+// show which variables n8n must fill, and so they can ride along in the launch
+// payload. Pass one text (e.g. a single variant) for per-item chips, or many
+// (variants + follow-ups) for a combined list. Shared by frontend + backend.
+export function extractPlaceholders(texts: Array<string | null | undefined>): string[] {
   const found = new Set<string>();
   const re = /\{\{\s*([^{}]+?)\s*\}\}/g;
   for (const text of texts) {
+    if (!text) continue;
     let match: RegExpExecArray | null;
     while ((match = re.exec(text)) !== null) {
       const token = match[1].trim();
@@ -219,3 +236,69 @@ export type EmailCampaignTemplate = typeof emailCampaignTemplates.$inferSelect;
 export type InsertEmailCampaignTemplate = z.infer<typeof insertEmailCampaignTemplateSchema>;
 export type EmailCampaignLaunch = typeof emailCampaignLaunches.$inferSelect;
 export type InsertEmailCampaignLaunch = z.infer<typeof insertEmailCampaignLaunchSchema>;
+
+// Converts a "YYYY-MM-DD" expiry date to Unix time in SECONDS (UTC midnight),
+// or null when no date is set. This is what the n8n launch payload sends.
+export function toUnixSeconds(dateStr?: string | null): number | null {
+  if (!dateStr) return null;
+  const ms = Date.parse(`${dateStr}T00:00:00Z`);
+  return Number.isNaN(ms) ? null : Math.floor(ms / 1000);
+}
+
+// Human labels for each A/B list, tied by position to the Sheet IDs / variants.
+export const LIST_LABELS = ["A YL", "B NL"] as const;
+
+// One A/B "list" in the launch payload: a single main-script variant paired with
+// its Sheet ID, plus the shared follow-ups and that list's combined placeholders.
+export interface LaunchList {
+  label: string;
+  variant: string;
+  sheetId: string | null;
+  mainScript: string;
+  followUps: string[];
+  placeholders: string[];
+}
+
+// Builds the JSON body POSTed to the n8n webhook when a campaign launches
+// (without the server-only `triggeredAt` stamp — see buildLaunchRequestBody).
+// Shared by the Express dev server, the Cloudflare Worker, and the frontend
+// launch preview so the payload shape never drifts between them.
+//
+// The payload is organised as an A/B model: each non-empty main-script variant
+// becomes a "list" paired with the same-index Sheet ID (Variant A → "A YL",
+// Variant B → "B NL"). Follow-ups are shared across every list. Each list also
+// carries its own combined placeholders, and the whole campaign gets a combined
+// placeholder list too.
+export function buildLaunchPayload(campaign: EmailCampaign) {
+  const followUps = campaign.followUps ?? [];
+  const variants = campaign.mainScripts ?? [];
+  const sheetIds = campaign.sheetIds ?? [];
+
+  const lists: LaunchList[] = [];
+  variants.forEach((raw, i) => {
+    const mainScript = (raw ?? "").trim();
+    if (!mainScript) return; // skip empty variants but keep index-based pairing
+    lists.push({
+      label: LIST_LABELS[i] ?? `Sheet ${i + 1}`,
+      variant: i === 0 ? "A" : i === 1 ? "B" : String(i + 1),
+      sheetId: sheetIds[i] ?? null,
+      mainScript,
+      followUps,
+      placeholders: extractPlaceholders([mainScript, ...followUps]),
+    });
+  });
+
+  return {
+    campaignId: campaign.id,
+    campaignName: campaign.campaignName,
+    campaignType: campaign.campaignType ?? null,
+    documentId: campaign.documentId,
+    sheetIds,
+    lists,
+    followUps,
+    // Combined placeholders across every variant + the shared follow-ups.
+    placeholders: extractPlaceholders([...variants, ...followUps]),
+    // Unix seconds (or null) — never the raw YYYY-MM-DD string.
+    expiryDate: toUnixSeconds(campaign.expiryDate),
+  };
+}
