@@ -1,6 +1,6 @@
 // Cloudflare Worker entry point
 import { storage } from "./storage-cloudflare";
-import { insertPromoCodeSchema, bulkGenerateSchema, apiTokenGenerateSchema, deleteBulkByFiltersSchema, insertEmailCampaignSchema, updateEmailCampaignSchema, insertEmailCampaignTemplateSchema } from "../shared/schema";
+import { insertPromoCodeSchema, bulkGenerateSchema, apiTokenGenerateSchema, deleteBulkByFiltersSchema, insertEmailCampaignSchema, updateEmailCampaignSchema, insertEmailCampaignTemplateSchema, parseExpiresAt } from "../shared/schema";
 import { z } from "zod";
 import { buildLaunchRequestBody, triggerN8nWebhook } from "./n8n";
 
@@ -367,13 +367,20 @@ async function handleAPI(request: Request, env: Env): Promise<Response> {
     if (path === '/api/promo-codes/generate' && method === 'POST') {
       const body = await request.json();
       const { format = "PROMO-XXXX", campaignName, discountValue, expiresAt } = body;
+      const parsedExpiry = parseExpiresAt(expiresAt);
+      if (!parsedExpiry.ok) {
+        return new Response(JSON.stringify({ message: 'Invalid expiresAt. Send an ISO date like 2026-01-31T00:00:00Z, or "", null or "null" for no expiry.' }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
       const code = await generateUniqueCode(format, env);
       
       const promoCode = await storageInstance.createPromoCode({ 
         code, 
         campaignName, 
         discountValue, 
-        expiresAt: expiresAt ? new Date(expiresAt) : undefined
+        expiresAt: parsedExpiry.value
       });
       
       return new Response(JSON.stringify(promoCode), {
@@ -384,6 +391,13 @@ async function handleAPI(request: Request, env: Env): Promise<Response> {
     if (path === '/api/promo-codes/generate-bulk' && method === 'POST') {
       const body = await request.json();
       const { count, format, campaignName, discountValue, expiresAt } = body;
+      const parsedExpiry = parseExpiresAt(expiresAt);
+      if (!parsedExpiry.ok) {
+        return new Response(JSON.stringify({ message: 'Invalid expiresAt. Send an ISO date like 2026-01-31T00:00:00Z, or "", null or "null" for no expiry.' }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
       const codes: string[] = [];
 
       // Generate unique codes
@@ -396,7 +410,7 @@ async function handleAPI(request: Request, env: Env): Promise<Response> {
         code, 
         campaignName, 
         discountValue, 
-        expiresAt: expiresAt ? new Date(expiresAt) : undefined 
+        expiresAt: parsedExpiry.value 
       }));
       
       const promoCodes = await storageInstance.createBulkPromoCodes(insertData);
@@ -408,6 +422,13 @@ async function handleAPI(request: Request, env: Env): Promise<Response> {
     if (path === '/api/promo-codes/generate-campaign' && method === 'POST') {
       const body = await request.json();
       const { campaignName, discountValue, count, format, expiresAt } = body;
+      const parsedExpiry = parseExpiresAt(expiresAt);
+      if (!parsedExpiry.ok) {
+        return new Response(JSON.stringify({ message: 'Invalid expiresAt. Send an ISO date like 2026-01-31T00:00:00Z, or "", null or "null" for no expiry.' }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
       const codes: string[] = [];
 
       // Generate unique codes
@@ -420,7 +441,7 @@ async function handleAPI(request: Request, env: Env): Promise<Response> {
         code, 
         campaignName, 
         discountValue, 
-        expiresAt: expiresAt ? new Date(expiresAt) : undefined 
+        expiresAt: parsedExpiry.value 
       }));
       
       const promoCodes = await storageInstance.createBulkPromoCodes(insertData);

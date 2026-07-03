@@ -40,12 +40,39 @@ export const insertPromoCodeSchema = createInsertSchema(promoCodes).pick({
   expiresAt: true,
 });
 
+// API clients (like the n8n workflow) may send "", null, or the literal string
+// "null" when a code has no expiry — all of these mean "no expiry date".
+const NO_EXPIRY_SENTINELS = ["", "null"];
+
+const expiresAtInput = z.preprocess(
+  (v) =>
+    v === null ||
+    (typeof v === "string" && NO_EXPIRY_SENTINELS.includes(v.trim().toLowerCase()))
+      ? undefined
+      : v,
+  z.string().datetime({ offset: true }).optional(),
+);
+
+// Same rule for endpoints that don't go through zod: returns { ok: false } only
+// for genuinely malformed values, and { ok: true, value: undefined } for the
+// "no expiry" sentinels ("", null, "null", undefined).
+export function parseExpiresAt(
+  value: unknown,
+): { ok: true; value: Date | undefined } | { ok: false } {
+  if (value === null || value === undefined) return { ok: true, value: undefined };
+  if (typeof value !== "string") return { ok: false };
+  const trimmed = value.trim();
+  if (NO_EXPIRY_SENTINELS.includes(trimmed.toLowerCase())) return { ok: true, value: undefined };
+  const parsed = new Date(trimmed);
+  return Number.isNaN(parsed.getTime()) ? { ok: false } : { ok: true, value: parsed };
+}
+
 export const bulkGenerateSchema = z.object({
   count: z.number().min(1).max(5000),
   format: z.string().min(1).max(50).default("PROMO-XXXX"),
   campaignName: z.string().optional(),
   discountValue: z.string().optional(),
-  expiresAt: z.string().datetime().optional(),
+  expiresAt: expiresAtInput,
 });
 
 export const campaignGenerateSchema = z.object({
@@ -53,7 +80,7 @@ export const campaignGenerateSchema = z.object({
   discountValue: z.string().min(1),
   count: z.number().min(1).max(5000),
   format: z.string().min(1).max(50).default("PROMO-XXXX"),
-  expiresAt: z.string().datetime().optional(),
+  expiresAt: expiresAtInput,
 });
 
 export const csvImportSchema = z.object({
@@ -63,7 +90,7 @@ export const csvImportSchema = z.object({
     campaignName: z.string().optional(),
     discountValue: z.string().optional(),
     usedAt: z.string().datetime().optional(),
-    expiresAt: z.string().datetime().optional(),
+    expiresAt: expiresAtInput,
   }))
 });
 

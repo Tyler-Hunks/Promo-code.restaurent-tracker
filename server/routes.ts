@@ -1,7 +1,7 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertPromoCodeSchema, bulkGenerateSchema, campaignGenerateSchema, csvImportSchema, apiTokenGenerateSchema, deleteBulkByFiltersSchema, insertEmailCampaignSchema, updateEmailCampaignSchema, insertEmailCampaignTemplateSchema, type BulkGenerate, type CampaignGenerate, type CsvImport, type ApiTokenGenerate } from "@shared/schema";
+import { insertPromoCodeSchema, bulkGenerateSchema, campaignGenerateSchema, csvImportSchema, apiTokenGenerateSchema, deleteBulkByFiltersSchema, insertEmailCampaignSchema, updateEmailCampaignSchema, insertEmailCampaignTemplateSchema, parseExpiresAt, type BulkGenerate, type CampaignGenerate, type CsvImport, type ApiTokenGenerate } from "@shared/schema";
 import crypto from "crypto";
 import { z } from "zod";
 import { buildLaunchRequestBody, triggerN8nWebhook } from "./n8n";
@@ -239,13 +239,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/promo-codes/generate", async (req, res) => {
     try {
       const { format = "PROMO-XXXX", campaignName, discountValue, expiresAt } = req.body;
+      const parsedExpiry = parseExpiresAt(expiresAt);
+      if (!parsedExpiry.ok) {
+        return res.status(400).json({ message: 'Invalid expiresAt. Send an ISO date like 2026-01-31T00:00:00Z, or "", null or "null" for no expiry.' });
+      }
       const code = await generateUniqueCode(format);
       
       const validation = insertPromoCodeSchema.safeParse({ 
         code, 
         campaignName, 
         discountValue, 
-        expiresAt 
+        expiresAt: parsedExpiry.value 
       });
       if (!validation.success) {
         return res.status(400).json({ message: "Invalid code format" });
@@ -255,7 +259,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         code, 
         campaignName, 
         discountValue, 
-        expiresAt 
+        expiresAt: parsedExpiry.value 
       });
       res.json(promoCode);
     } catch (error) {
