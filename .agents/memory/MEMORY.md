@@ -1,1 +1,1 @@
-- [Deploy & database operational model](deploy-and-db.md) — dev shares prod Supabase; migrations are manual via SQL Editor; deploy is `npm run deploy`; payload builder is single source of truth.
+- [Deploy & database operational model](deploy-and-db.md) — prod = Cloudflare Worker + Supabase; wrangler secrets can drift from Replit secrets; migrations manual via SQL Editor; agent shell never sees updated secrets.

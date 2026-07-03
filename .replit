@@ -35,10 +35,6 @@ author = "agent"
 task = "workflow.run"
 args = "Start application"
 
-[[workflows.workflow.tasks]]
-task = "workflow.run"
-args = "Sync Supabase Secrets"
-
 [[workflows.workflow]]
 name = "Start application"
 author = "agent"
@@ -47,16 +43,5 @@ author = "agent"
 task = "shell.exec"
 args = "npm run dev"
 waitForPort = 5000
-
-[[workflows.workflow]]
-name = "Sync Supabase Secrets"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "bash scripts/sync-supabase-secrets.sh"
-
-[workflows.workflow.metadata]
-outputType = "console"
 
 [agent]
