@@ -286,12 +286,14 @@ export type InsertEmailCampaignTemplate = z.infer<typeof insertEmailCampaignTemp
 export type EmailCampaignLaunch = typeof emailCampaignLaunches.$inferSelect;
 export type InsertEmailCampaignLaunch = z.infer<typeof insertEmailCampaignLaunchSchema>;
 
-// Converts a "YYYY-MM-DD" expiry date to Unix time in SECONDS (UTC midnight),
-// or null when no date is set. This is what the n8n launch payload sends.
-export function toUnixSeconds(dateStr?: string | null): number | null {
+// Converts a "YYYY-MM-DD" expiry date to an ISO 8601 UTC timestamp string
+// (e.g. "2026-01-31T00:00:00Z"), or null when no date is set. This is what the
+// n8n launch payload sends — n8n pings it back to create a promo code, so the
+// format must stay "YYYY-MM-DDTHH:mm:ssZ".
+export function toIsoUtc(dateStr?: string | null): string | null {
   if (!dateStr) return null;
   const ms = Date.parse(`${dateStr}T00:00:00Z`);
-  return Number.isNaN(ms) ? null : Math.floor(ms / 1000);
+  return Number.isNaN(ms) ? null : `${dateStr}T00:00:00Z`;
 }
 
 // Human labels for each A/B list, tied by position to the Sheet IDs / variants.
@@ -347,7 +349,8 @@ export function buildLaunchPayload(campaign: EmailCampaign) {
     followUps,
     // Combined placeholders across every variant + the shared follow-ups.
     placeholders: extractPlaceholders([...variants, ...followUps]),
-    // Unix seconds (or null) — never the raw YYYY-MM-DD string.
-    expiryDate: toUnixSeconds(campaign.expiryDate),
+    // ISO UTC timestamp like "2026-01-31T00:00:00Z" (or null) — never the raw
+    // YYYY-MM-DD string. n8n uses this to create the promo code's expiry.
+    expiryDate: toIsoUtc(campaign.expiryDate),
   };
 }

@@ -947,6 +947,7 @@ export default function Campaigns() {
   const [launchTarget, setLaunchTarget] = useState<EmailCampaign | null>(null);
   const [launchResult, setLaunchResult] = useState<LaunchResult | null>(null);
   const [selectedLaunch, setSelectedLaunch] = useState<EmailCampaignLaunch | null>(null);
+  const [deleteTemplateTarget, setDeleteTemplateTarget] = useState<EmailCampaignTemplate | null>(null);
 
   const [campaignSearch, setCampaignSearch] = useState("");
   const [templateSearch, setTemplateSearch] = useState("");
@@ -1050,6 +1051,24 @@ export default function Campaigns() {
     onError: (error) => {
       toast({
         title: "Could not save template",
+        description: getErrorMessage(error, "Please try again."),
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteTemplateMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await apiRequest("DELETE", `/api/email-campaign-templates/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/email-campaign-templates"] });
+      setDeleteTemplateTarget(null);
+      toast({ title: "Template deleted" });
+    },
+    onError: (error) => {
+      toast({
+        title: "Could not delete template",
         description: getErrorMessage(error, "Please try again."),
         variant: "destructive",
       });
@@ -1592,16 +1611,25 @@ export default function Campaigns() {
                         <span className="text-muted-foreground">Follow-ups</span>
                         <span>{t.defaultFollowUps?.length ?? 0}</span>
                       </div>
-                      <div className="pt-2">
+                      <div className="pt-2 flex gap-2">
                         <Button
                           size="sm"
                           variant="outline"
-                          className="w-full"
+                          className="flex-1"
                           onClick={() => openFromTemplate(t)}
                           data-testid={`button-use-template-${t.id}`}
                         >
                           <Plus className="h-4 w-4 mr-2" />
                           New campaign from this
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-destructive"
+                          onClick={() => setDeleteTemplateTarget(t)}
+                          data-testid={`button-delete-template-${t.id}`}
+                        >
+                          <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
                     </CardContent>
@@ -1718,6 +1746,43 @@ export default function Campaigns() {
                 <Rocket className="h-4 w-4 mr-2" />
               )}
               {launchTarget?.status === "launched" ? "Re-launch" : "Launch"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete template confirmation */}
+      <AlertDialog
+        open={!!deleteTemplateTarget}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTemplateTarget(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this template?</AlertDialogTitle>
+            <AlertDialogDescription>
+              <strong>{deleteTemplateTarget?.name}</strong> will be permanently removed.
+              Campaigns you already created from it are not affected.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-delete-template">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={deleteTemplateMutation.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={(e) => {
+                e.preventDefault();
+                if (deleteTemplateTarget) deleteTemplateMutation.mutate(deleteTemplateTarget.id);
+              }}
+              data-testid="button-confirm-delete-template"
+            >
+              {deleteTemplateMutation.isPending ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Trash2 className="h-4 w-4 mr-2" />
+              )}
+              Delete
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -677,6 +677,19 @@ export class CloudflareStorage implements IStorage {
     return this.mapEmailCampaignTemplateFromDb(created);
   }
 
+  async deleteEmailCampaignTemplate(id: string): Promise<boolean> {
+    const { data, error } = await this.supabase
+      .from('email_campaign_templates')
+      .delete()
+      .eq('id', id)
+      .select('id');
+    if (error) {
+      console.error('deleteEmailCampaignTemplate failed:', error);
+      throw new Error(`Failed to delete template: ${error.message}`);
+    }
+    return (data?.length ?? 0) > 0;
+  }
+
   async getEmailCampaignLaunches(): Promise<EmailCampaignLaunch[]> {
     const { data, error } = await this.supabase
       .from('email_campaign_launches')

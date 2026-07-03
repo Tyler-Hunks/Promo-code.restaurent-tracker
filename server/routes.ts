@@ -721,6 +721,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.delete("/api/email-campaign-templates/:id", async (req, res) => {
+    try {
+      const deleted = await storage.deleteEmailCampaignTemplate(req.params.id);
+      if (!deleted) {
+        return res.status(404).json({ message: "Template not found" });
+      }
+      res.json({ message: "Template deleted" });
+    } catch (error) {
+      res.status(500).json({ message: error instanceof Error ? error.message : "Failed to delete template" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

@@ -723,6 +723,20 @@ async function handleAPI(request: Request, env: Env): Promise<Response> {
       });
     }
 
+    if (path.startsWith('/api/email-campaign-templates/') && method === 'DELETE') {
+      const id = path.split('/')[3];
+      const deleted = await storageInstance.deleteEmailCampaignTemplate(id);
+      if (!deleted) {
+        return new Response(JSON.stringify({ message: 'Template not found' }), {
+          status: 404,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+      return new Response(JSON.stringify({ message: 'Template deleted' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
     return new Response(JSON.stringify({ message: 'Route not found' }), {
       status: 404,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }

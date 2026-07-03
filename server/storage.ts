@@ -57,6 +57,7 @@ export interface IStorage {
   markEmailCampaignLaunched(id: string): Promise<EmailCampaign | undefined>;
   getEmailCampaignTemplates(): Promise<EmailCampaignTemplate[]>;
   createEmailCampaignTemplate(data: InsertEmailCampaignTemplate): Promise<EmailCampaignTemplate>;
+  deleteEmailCampaignTemplate(id: string): Promise<boolean>;
   getEmailCampaignLaunches(): Promise<EmailCampaignLaunch[]>;
   createEmailCampaignLaunch(data: InsertEmailCampaignLaunch): Promise<EmailCampaignLaunch>;
 }
@@ -479,6 +480,10 @@ export class MemStorage implements IStorage {
     return template;
   }
 
+  async deleteEmailCampaignTemplate(id: string): Promise<boolean> {
+    return this.emailCampaignTemplates.delete(id);
+  }
+
   async getEmailCampaignLaunches(): Promise<EmailCampaignLaunch[]> {
     return Array.from(this.emailCampaignLaunches.values()).sort(
       (a, b) => new Date(b.launchedAt).getTime() - new Date(a.launchedAt).getTime()
@@ -855,6 +860,11 @@ export class DatabaseStorage implements IStorage {
       notes: data.notes ?? null,
     }).returning();
     return created;
+  }
+
+  async deleteEmailCampaignTemplate(id: string): Promise<boolean> {
+    const deleted = await db.delete(emailCampaignTemplates).where(eq(emailCampaignTemplates.id, id)).returning();
+    return deleted.length > 0;
   }
 
   async getEmailCampaignLaunches(): Promise<EmailCampaignLaunch[]> {
