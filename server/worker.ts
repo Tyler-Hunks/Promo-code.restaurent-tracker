@@ -1,6 +1,6 @@
 // Cloudflare Worker entry point
 import { storage } from "./storage-cloudflare";
-import { insertPromoCodeSchema, bulkGenerateSchema, apiTokenGenerateSchema, deleteBulkByFiltersSchema, insertEmailCampaignSchema, updateEmailCampaignSchema, insertEmailCampaignTemplateSchema, parseExpiresAt } from "../shared/schema";
+import { insertPromoCodeSchema, bulkGenerateSchema, apiTokenGenerateSchema, deleteBulkByFiltersSchema, insertEmailCampaignSchema, updateEmailCampaignSchema, insertEmailCampaignTemplateSchema, parseExpiresAt, LIST_LABELS } from "../shared/schema";
 import { z } from "zod";
 import { buildLaunchRequestBody, triggerN8nWebhook } from "./n8n";
 
@@ -657,11 +657,12 @@ async function handleAPI(request: Request, env: Env): Promise<Response> {
         });
       }
 
-      // There must be at least one non-empty main-script variant (Variant A),
-      // otherwise the payload's `lists` would be empty and n8n would email nobody.
-      if (!campaign.mainScripts?.some((s) => s?.trim())) {
+      // Both main scripts (one per list) must be filled in, otherwise a list
+      // in the payload would have no message and n8n would email nobody on it.
+      const scripts = campaign.mainScripts ?? [];
+      if (scripts.length < 2 || scripts.some((s) => !s?.trim())) {
         return new Response(JSON.stringify({
-          message: "Add at least the Variant A main script before launching, so there's a message to send.",
+          message: `Both main scripts ("${LIST_LABELS[0]}" and "${LIST_LABELS[1]}") must be filled in before launching. Open the campaign, add them, then try again.`,
         }), {
           status: 400,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }

@@ -252,9 +252,10 @@ function PlaceholderChips({
 }
 
 // ---------------------------------------------------------------------------
-// Main-script variants editor (A/B). Up to 2 variants, tied by position to the
-// Sheet IDs: Variant A → "A YL", Variant B → "B NL". Each shows its own
-// detected placeholders. Shared between campaign + template forms.
+// Main-scripts editor. Always exactly 2 scripts — one per list, tied by
+// position to the Sheet IDs: LIST_LABELS[0] → first sheet, LIST_LABELS[1] →
+// second sheet. Each shows its own detected placeholders. Shared between
+// campaign + template forms.
 // ---------------------------------------------------------------------------
 function MainScriptsEditor({
   value,
@@ -265,78 +266,46 @@ function MainScriptsEditor({
   onChange: (v: string[]) => void;
   idPrefix: string;
 }) {
-  // Always show at least Variant A so there's somewhere to type.
-  const variants = value.length === 0 ? [""] : value;
+  // Always show both script boxes — one per list.
+  const scripts = [value[0] ?? "", value[1] ?? ""];
 
   const setAt = (i: number, text: string) => {
-    const next = [...variants];
+    const next = [...scripts];
     next[i] = text;
     onChange(next);
   };
 
   return (
     <div className="space-y-3">
-      {variants.map((v, i) => {
-        const label = i === 0 ? "Variant A" : "Variant B";
-        const sheetLabel = LIST_LABELS[i] ?? `Sheet #${i + 1}`;
+      {scripts.map((v, i) => {
+        const label = LIST_LABELS[i] ?? `Sheet #${i + 1}`;
         return (
           <div key={i} className="rounded-md border p-3 space-y-2">
-            <div className="flex items-center justify-between gap-2">
-              <Label
-                htmlFor={`${idPrefix}-variant-${i}`}
-                className="text-xs font-medium"
-              >
-                {label}{" "}
-                <span className="text-muted-foreground font-normal">
-                  → sends to Sheet “{sheetLabel}”
-                </span>
-              </Label>
-              {i > 0 && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  className="h-7 w-7"
-                  onClick={() => onChange(variants.filter((_, idx) => idx !== i))}
-                  data-testid={`button-remove-variant-${i}`}
-                  title="Remove Variant B"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              )}
-            </div>
+            <Label
+              htmlFor={`${idPrefix}-main-script-${i}`}
+              className="text-xs font-medium"
+            >
+              {label}{" "}
+              <span className="text-muted-foreground font-normal">
+                → sends to the {i === 0 ? "first" : "second"} Sheet ID
+              </span>
+            </Label>
             <Textarea
-              id={`${idPrefix}-variant-${i}`}
+              id={`${idPrefix}-main-script-${i}`}
               value={v}
               onChange={(e) => setAt(i, e.target.value)}
-              placeholder={
-                i === 0
-                  ? "The first email message… use {{ name }} for variables."
-                  : "The Variant B message (A/B test)… use {{ name }} for variables."
-              }
+              placeholder={`The message for the "${label}" list… use {{ name }} for variables.`}
               rows={4}
               data-testid={`input-main-script-${i}`}
             />
             <PlaceholderChips
               texts={[v]}
-              testId={`placeholder-chips-variant-${i}`}
+              testId={`placeholder-chips-main-script-${i}`}
               emptyHint={false}
             />
           </div>
         );
       })}
-      {variants.length < 2 && (
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => onChange([...variants, ""])}
-          data-testid="button-add-variant"
-        >
-          <Plus className="h-4 w-4 mr-2" />
-          Add Variant B
-        </Button>
-      )}
     </div>
   );
 }
@@ -487,8 +456,8 @@ interface CampaignFormState {
   notes: string;
 }
 
-// Trims variants and drops trailing empties, but keeps internal positions so
-// Variant A stays at index 0 and Variant B at index 1 (pairing with the sheets).
+// Trims scripts and drops trailing empties, but keeps internal positions so
+// each script stays paired with its same-index Sheet ID / list label.
 function normalizeVariants(variants: string[]): string[] {
   const out = variants.map((s) => s.trim());
   while (out.length > 0 && out[out.length - 1] === "") out.pop();
@@ -501,7 +470,7 @@ function emptyCampaignState(): CampaignFormState {
     campaignType: "",
     documentId: "",
     sheetIds: ["", ""],
-    mainScripts: [""],
+    mainScripts: ["", ""],
     followUps: [],
     expiryDate: "",
     notes: "",
@@ -510,7 +479,7 @@ function emptyCampaignState(): CampaignFormState {
 
 function stateFromCampaign(c: EmailCampaign): CampaignFormState {
   const sheetIds = c.sheetIds && c.sheetIds.length > 0 ? [...c.sheetIds] : ["", ""];
-  const mainScripts = c.mainScripts && c.mainScripts.length > 0 ? [...c.mainScripts] : [""];
+  const mainScripts = [c.mainScripts?.[0] ?? "", c.mainScripts?.[1] ?? ""];
   return {
     campaignName: c.campaignName ?? "",
     campaignType: c.campaignType ?? "",
@@ -599,13 +568,9 @@ function CampaignForm({
       setError("Each Sheet ID (gid) must be a number, e.g. 0 or 123456789.");
       return;
     }
-    const variants = normalizeVariants(state.mainScripts);
-    if (variants.length === 0) {
-      setError("Add at least the Variant A main script.");
-      return;
-    }
-    if (variants.some((v) => v === "")) {
-      setError("Variant A can't be empty when Variant B is filled in. Fill in Variant A or remove Variant B.");
+    const mainScripts = state.mainScripts.map((s) => s.trim());
+    if (mainScripts.length < 2 || mainScripts.some((v) => v === "")) {
+      setError(`Both main scripts are required — fill in "${LIST_LABELS[0]}" and "${LIST_LABELS[1]}".`);
       return;
     }
     const expiry = state.expiryDate.trim();
@@ -686,10 +651,10 @@ function CampaignForm({
       </div>
 
       <div className="space-y-1.5">
-        <Label>Main script (A/B variants)</Label>
+        <Label>Main scripts *</Label>
         <p className="text-xs text-muted-foreground">
-          Variant A always sends. Add Variant B to A/B test — it sends to the second
-          sheet ("{LIST_LABELS[1]}") while Variant A sends to the first ("{LIST_LABELS[0]}").
+          One message per list — both are required. To try different versions of a
+          message, paste them all into the same box; n8n detects them automatically.
         </p>
         <MainScriptsEditor
           value={state.mainScripts}
@@ -699,7 +664,7 @@ function CampaignForm({
       </div>
 
       <div className="space-y-1.5">
-        <Label>Follow-up messages (shared by both variants)</Label>
+        <Label>Follow-up messages (shared by both lists)</Label>
         <FollowUpsEditor
           value={state.followUps}
           onChange={(followUps) => update({ followUps })}
@@ -811,10 +776,6 @@ function TemplateForm({
       return;
     }
     const defaultMainScripts = normalizeVariants(state.defaultMainScripts);
-    if (defaultMainScripts.some((v) => v === "")) {
-      setError("Variant A can't be empty when Variant B is filled in. Fill in Variant A or remove Variant B.");
-      return;
-    }
     setError("");
     onSubmit({
       name,
@@ -868,7 +829,10 @@ function TemplateForm({
         />
       </div>
       <div className="space-y-1.5">
-        <Label>Default main script (A/B variants)</Label>
+        <Label>Default main scripts</Label>
+        <p className="text-xs text-muted-foreground">
+          Optional defaults — new campaigns start with these, one per list.
+        </p>
         <MainScriptsEditor
           value={state.defaultMainScripts}
           onChange={(defaultMainScripts) => update({ defaultMainScripts })}

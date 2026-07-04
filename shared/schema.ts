@@ -135,11 +135,11 @@ export const emailCampaigns = pgTable("email_campaigns", {
   // One Google Sheet file (the Document ID) holding the campaign's lead tabs.
   documentId: text("document_id").notNull(),
   // The tab gids inside that document (at least 2 — e.g. lead lists).
-  // Tied to the main-script variants by position: sheetIds[0] = "A YL" ↔
-  // Variant A, sheetIds[1] = "B NL" ↔ Variant B.
+  // Tied to the main scripts by position: sheetIds[0] ↔ mainScripts[0]
+  // ("A: Yes Location"), sheetIds[1] ↔ mainScripts[1] ("B: No Location").
   sheetIds: text("sheet_ids").array().notNull().default(sql`'{}'::text[]`),
-  // Up to 2 main-script variants (A, B) for A/B testing. Index 0 = Variant A,
-  // index 1 = Variant B. Each pairs with the same-index Sheet ID.
+  // The 2 main scripts — one per list. Index 0 = "A: Yes Location", index 1 =
+  // "B: No Location". Each pairs with the same-index Sheet ID.
   mainScripts: text("main_scripts").array().notNull().default(sql`'{}'::text[]`),
   followUps: text("follow_ups").array().notNull().default(sql`'{}'::text[]`),
   expiryDate: date("expiry_date"),
@@ -185,19 +185,28 @@ const sheetIdsField = z
   )
   .min(2, "Add at least 2 Sheet IDs (gids)");
 
-// Up to 2 A/B main-script variants (index 0 = Variant A, index 1 = Variant B).
-// Variant A must be filled before Variant B, so an empty A can never be paired
-// with a filled B — this keeps the index→sheet pairing meaningful and matches
-// the frontend rule for direct API clients too.
-const variantsField = z
+// Human labels for the two lead lists, tied by position to the Sheet IDs and
+// main scripts: index 0 = first sheet, index 1 = second sheet. These labels
+// also appear in the n8n launch payload as each list's `label`.
+export const LIST_LABELS = ["A: Yes Location", "B: No Location"] as const;
+
+// Both main scripts are always required on a campaign — one per list. Any
+// message variations are pasted into the same textbox (n8n detects them), so
+// the two boxes are separate scripts for separate lists, not an A/B test.
+const mainScriptsField = z
   .array(z.string())
-  .max(2, "At most 2 main-script variants (A and B)")
-  .optional()
-  .default([])
+  .max(2, "At most 2 main scripts (one per list)")
   .refine(
-    (arr) => !arr.slice(1).some((s) => s?.trim()) || Boolean(arr[0]?.trim()),
-    { message: "Fill in Variant A before adding Variant B" },
+    (arr) => arr.length === 2 && arr.every((s) => Boolean(s?.trim())),
+    { message: `Both main scripts are required ("${LIST_LABELS[0]}" and "${LIST_LABELS[1]}")` },
   );
+
+// Templates only hold defaults, so their scripts may be left blank.
+const defaultMainScriptsField = z
+  .array(z.string())
+  .max(2, "At most 2 main scripts (one per list)")
+  .optional()
+  .default([]);
 
 export const insertEmailCampaignSchema = createInsertSchema(emailCampaigns)
   .omit({ id: true, status: true, lastLaunchedAt: true, createdAt: true })
@@ -206,7 +215,7 @@ export const insertEmailCampaignSchema = createInsertSchema(emailCampaigns)
     campaignType: z.string().optional().nullable(),
     documentId: documentIdField,
     sheetIds: sheetIdsField,
-    mainScripts: variantsField,
+    mainScripts: mainScriptsField,
     followUps: z.array(z.string()).optional().default([]),
     expiryDate: z
       .string()
@@ -228,7 +237,7 @@ export const insertEmailCampaignTemplateSchema = createInsertSchema(emailCampaig
       .array(z.string().regex(/^\d+$/, "Each Sheet ID (gid) should be a number"))
       .optional()
       .default([]),
-    defaultMainScripts: variantsField,
+    defaultMainScripts: defaultMainScriptsField,
     defaultFollowUps: z.array(z.string()).optional().default([]),
     notes: z.string().optional().nullable(),
   });
@@ -323,14 +332,11 @@ export function toIsoUtc(dateStr?: string | null): string | null {
   return Number.isNaN(ms) ? null : `${dateStr}T00:00:00Z`;
 }
 
-// Human labels for each A/B list, tied by position to the Sheet IDs / variants.
-export const LIST_LABELS = ["A YL", "B NL"] as const;
-
-// One A/B "list" in the launch payload: a single main-script variant paired with
-// its Sheet ID, plus the shared follow-ups and that list's combined placeholders.
+// One "list" in the launch payload: a single main script paired with its Sheet
+// ID, plus the shared follow-ups and that list's combined placeholders. The
+// `label` alone identifies the list — there is no separate `variant` field.
 export interface LaunchList {
   label: string;
-  variant: string;
   sheetId: string | null;
   mainScript: string;
   followUps: string[];
@@ -342,11 +348,11 @@ export interface LaunchList {
 // Shared by the Express dev server, the Cloudflare Worker, and the frontend
 // launch preview so the payload shape never drifts between them.
 //
-// The payload is organised as an A/B model: each non-empty main-script variant
-// becomes a "list" paired with the same-index Sheet ID (Variant A → "A YL",
-// Variant B → "B NL"). Follow-ups are shared across every list. Each list also
-// carries its own combined placeholders, and the whole campaign gets a combined
-// placeholder list too.
+// Each non-empty main script becomes a "list" paired with the same-index Sheet
+// ID (mainScripts[0] → "A: Yes Location", mainScripts[1] → "B: No Location").
+// Follow-ups are shared across every list. Each list also carries its own
+// combined placeholders, and the whole campaign gets a combined placeholder
+// list too.
 export function buildLaunchPayload(campaign: EmailCampaign) {
   const followUps = campaign.followUps ?? [];
   const variants = campaign.mainScripts ?? [];
@@ -355,10 +361,9 @@ export function buildLaunchPayload(campaign: EmailCampaign) {
   const lists: LaunchList[] = [];
   variants.forEach((raw, i) => {
     const mainScript = (raw ?? "").trim();
-    if (!mainScript) return; // skip empty variants but keep index-based pairing
+    if (!mainScript) return; // skip empty scripts but keep index-based pairing
     lists.push({
       label: LIST_LABELS[i] ?? `Sheet ${i + 1}`,
-      variant: i === 0 ? "A" : i === 1 ? "B" : String(i + 1),
       sheetId: sheetIds[i] ?? null,
       mainScript,
       followUps,

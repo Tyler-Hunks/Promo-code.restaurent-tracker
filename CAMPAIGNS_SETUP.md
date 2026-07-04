@@ -39,10 +39,11 @@ There are four things to set up, in this order:
 
 ### Input — what the app sends to n8n
 
-Every launch sends a `POST` request with this JSON body. It's built as an **A/B
-model**: each main-script **variant** becomes a "list" paired, by position, with
-a Sheet ID — Variant A → `"A YL"` (first sheet), Variant B → `"B NL"` (second
-sheet). The follow-ups are shared by every list.
+Every launch sends a `POST` request with this JSON body. Each main script
+becomes a "list" paired, by position, with a Sheet ID — the first script →
+`"A: Yes Location"` (first sheet), the second → `"B: No Location"` (second
+sheet). The `label` alone identifies each list. The follow-ups are shared by
+every list.
 
 ```json
 {
@@ -53,16 +54,14 @@ sheet). The follow-ups are shared by every list.
   "sheetIds": ["0", "123456789"],
   "lists": [
     {
-      "label": "A YL",
-      "variant": "A",
+      "label": "A: Yes Location",
       "sheetId": "0",
       "mainScript": "Hi {{ first_name }}, ...",
       "followUps": ["Just following up, {{ first_name }}...", "Last note..."],
       "placeholders": ["first_name"]
     },
     {
-      "label": "B NL",
-      "variant": "B",
+      "label": "B: No Location",
       "sheetId": "123456789",
       "mainScript": "Hey {{ first_name }} — quick one ...",
       "followUps": ["Just following up, {{ first_name }}...", "Last note..."],
@@ -71,7 +70,7 @@ sheet). The follow-ups are shared by every list.
   ],
   "followUps": ["Just following up, {{ first_name }}...", "Last note..."],
   "placeholders": ["first_name"],
-  "expiryDate": 1785456000,
+  "expiryDate": "2026-08-01T00:00:00Z",
   "triggeredAt": "2026-06-30T09:15:00.000Z"
 }
 ```
@@ -85,28 +84,29 @@ Field guide:
 | `campaignType`        | A free-text label (e.g. `cold-email`), or `null`.                                |
 | `documentId`          | **One** Google Sheet file — the long ID from the spreadsheet URL.                |
 | `sheetIds`            | An **array** of tab gids inside that document (always at least 2).               |
-| `lists`               | The A/B lists — **one per non-empty variant** (see below). Length 1 or 2.        |
-| `lists[].label`       | The list's label: `"A YL"` for Variant A, `"B NL"` for Variant B.               |
-| `lists[].variant`     | `"A"` or `"B"`.                                                                   |
+| `lists`               | The two lead lists — one per main script.                                        |
+| `lists[].label`       | `"A: Yes Location"` for the first list, `"B: No Location"` for the second.      |
 | `lists[].sheetId`     | The single tab gid this list emails (the same-index entry from `sheetIds`).      |
-| `lists[].mainScript`  | That variant's first email message. May contain `{{ placeholders }}`.            |
+| `lists[].mainScript`  | That list's first email message. May contain `{{ placeholders }}`.               |
 | `lists[].followUps`   | The shared follow-up messages (identical in every list).                         |
 | `lists[].placeholders`| Every `{{ token }}` found in **this list's** script + follow-ups.                |
 | `followUps`           | The shared follow-up messages, at the top level for convenience.                 |
-| `placeholders`        | Every `{{ token }}` found across **all** variants + follow-ups (whole campaign). |
-| `expiryDate`          | Optional **Unix timestamp in seconds** (UTC), or `null`.                         |
+| `placeholders`        | Every `{{ token }}` found across **all** scripts + follow-ups (whole campaign).  |
+| `expiryDate`          | Optional **ISO date-time in UTC** (`YYYY-MM-DDT00:00:00Z`), or `null`.           |
 | `triggeredAt`         | The moment the launch was fired (ISO timestamp), added automatically.            |
 
-> **A/B variants.** A campaign always has **Variant A** and can optionally add
-> **Variant B** to split-test. Each variant is tied by position to a Sheet ID, so
-> Variant A emails the first sheet (`A YL`) and Variant B the second (`B NL`). If
-> you only fill in Variant A, `lists` has a single entry.
+> **Two lists, two scripts.** Every campaign has exactly **two main scripts**,
+> one per list, and both are required. Each script is tied by position to a
+> Sheet ID: the "A: Yes Location" script emails the first sheet and the
+> "B: No Location" script emails the second. These are **not** A/B variants —
+> to try different versions of a message, paste them all into the same script
+> box and n8n detects them automatically.
 
 > **Placeholders are detected automatically.** Anywhere you write `{{ name }}`
-> style tokens in a variant or a follow-up, the app collects the unique names.
+> style tokens in a script or a follow-up, the app collects the unique names.
 > Each list gets its own `placeholders`, and the top-level `placeholders` combines
 > them for the whole campaign. The same chips are shown on screen while you edit —
-> per variant, per follow-up, and combined.
+> per script, per follow-up, and combined.
 
 Header sent with the request (only when you've set a secret):
 
@@ -206,12 +206,12 @@ The page has three tabs:
 - **Campaigns** — your campaigns as cards. Each shows its status, Document ID,
   how many Sheet IDs and follow-ups it has, and how many placeholders were found.
   - **New campaign** — fill in the name, the **Google Sheet Document ID**, at
-    least **2 Sheet IDs (tab gids)**, the **main script** (Variant A, plus an
-    optional Variant B for A/B testing), and any follow-ups. Variant A sends to
-    the first sheet (`A YL`) and Variant B to the second (`B NL`). The **expiry
-    date** is typed as `YYYY-MM-DD` (or left blank) and is sent to n8n as a Unix
-    timestamp in seconds. It's saved as a **Draft**. The form checks the Document
-    ID, Sheet ID, and date formats before saving.
+    least **2 Sheet IDs (tab gids)**, **both main scripts** (one per list:
+    "A: Yes Location" sends to the first sheet, "B: No Location" to the second),
+    and any follow-ups. The **expiry date** is typed as `YYYY-MM-DD` (or left
+    blank) and is sent to n8n as an ISO date-time (`YYYY-MM-DDT00:00:00Z`). It's
+    saved as a **Draft**. The form checks the Document ID, Sheet ID, and date
+    formats before saving.
   - **Duplicate** — copy an existing campaign as a starting point.
   - **Search** — filter by name, type, or Document ID.
   - **Launch** — confirm on the launch screen, which shows a **preview of the
@@ -225,6 +225,7 @@ The page has three tabs:
   prefill a new campaign.
 
 > Tips: a campaign can only launch once it has a Document ID, **at least 2
-> Sheet IDs**, and **at least Variant A** filled in — this protects against
-> sending an incomplete request. Campaigns and templates can be created and
-> edited, but **not deleted**, so your launch history is always kept.
+> Sheet IDs**, and **both main scripts** filled in — this protects against
+> sending an incomplete request. Campaigns can be created and edited, but
+> **not deleted**, so your launch history is always kept. Templates **can** be
+> deleted.

@@ -1,7 +1,7 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertPromoCodeSchema, bulkGenerateSchema, campaignGenerateSchema, csvImportSchema, apiTokenGenerateSchema, deleteBulkByFiltersSchema, insertEmailCampaignSchema, updateEmailCampaignSchema, insertEmailCampaignTemplateSchema, parseExpiresAt, type BulkGenerate, type CampaignGenerate, type CsvImport, type ApiTokenGenerate } from "@shared/schema";
+import { insertPromoCodeSchema, bulkGenerateSchema, campaignGenerateSchema, csvImportSchema, apiTokenGenerateSchema, deleteBulkByFiltersSchema, insertEmailCampaignSchema, updateEmailCampaignSchema, insertEmailCampaignTemplateSchema, parseExpiresAt, LIST_LABELS, type BulkGenerate, type CampaignGenerate, type CsvImport, type ApiTokenGenerate } from "@shared/schema";
 import crypto from "crypto";
 import { z } from "zod";
 import { buildLaunchRequestBody, triggerN8nWebhook } from "./n8n";
@@ -658,12 +658,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // There must be at least one non-empty main-script variant (Variant A),
-      // otherwise the payload's `lists` would be empty and n8n would email nobody.
-      if (!campaign.mainScripts?.some((s) => s?.trim())) {
+      // Both main scripts (one per list) must be filled in, otherwise a list
+      // in the payload would have no message and n8n would email nobody on it.
+      const scripts = campaign.mainScripts ?? [];
+      if (scripts.length < 2 || scripts.some((s) => !s?.trim())) {
         return res.status(400).json({
-          message:
-            "Add at least the Variant A main script before launching, so there's a message to send.",
+          message: `Both main scripts ("${LIST_LABELS[0]}" and "${LIST_LABELS[1]}") must be filled in before launching. Open the campaign, add them, then try again.`,
         });
       }
 
