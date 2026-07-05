@@ -1,7 +1,7 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertPromoCodeSchema, bulkGenerateSchema, campaignGenerateSchema, csvImportSchema, apiTokenGenerateSchema, deleteBulkByFiltersSchema, insertEmailCampaignSchema, updateEmailCampaignSchema, insertEmailCampaignTemplateSchema, parseExpiresAt, LIST_LABELS, type BulkGenerate, type CampaignGenerate, type CsvImport, type ApiTokenGenerate } from "@shared/schema";
+import { insertPromoCodeSchema, bulkGenerateSchema, campaignGenerateSchema, csvImportSchema, apiTokenGenerateSchema, deleteBulkByFiltersSchema, insertEmailCampaignSchema, updateEmailCampaignSchema, insertEmailCampaignTemplateSchema, runCallbackSchema, parseExpiresAt, LIST_LABELS, type BulkGenerate, type CampaignGenerate, type CsvImport, type ApiTokenGenerate } from "@shared/schema";
 import crypto from "crypto";
 import { z } from "zod";
 import { buildLaunchRequestBody, triggerN8nWebhook } from "./n8n";
@@ -149,6 +149,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use('/api', (req, res, next) => {
     // Skip auth for login endpoint
     if (req.path === '/auth/login') {
+      return next();
+    }
+    // Skip Bearer auth for the n8n run callback — it authenticates with the
+    // shared N8N_WEBHOOK_SECRET header instead (checked inside the route).
+    if (req.path === '/campaign-runs/callback') {
       return next();
     }
     requireAuth(req, res, next);
@@ -676,15 +681,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      const payload = buildLaunchRequestBody(campaign);
+      // The launch record's id doubles as the runId n8n reports back with, so
+      // it's generated up front and sent along in the payload.
+      const runId = crypto.randomUUID();
+      const callbackUrl = `${req.protocol}://${req.get("host")}/api/campaign-runs/callback`;
+      const payload = {
+        ...buildLaunchRequestBody(campaign),
+        runId,
+        callbackUrl,
+      };
       const result = await triggerN8nWebhook(webhookUrl, secret, payload);
 
-      // Record every launch attempt (success OR failure) in the history.
+      // Record every launch attempt (success OR failure) in the history. When
+      // the webhook was accepted, the workflow is now running — mark the run
+      // "in_progress" until n8n calls back to say it finished or failed.
       await storage.createEmailCampaignLaunch({
+        id: runId,
         campaignId: campaign.id,
         campaignName: campaign.campaignName,
         status: result.ok ? "success" : "failed",
         detail: result.detail ?? result.message ?? null,
+        runStatus: result.ok ? "in_progress" : null,
       });
 
       if (!result.ok) {
@@ -702,7 +719,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Launch history — every launch attempt across all campaigns, newest first.
+  // Called BY n8n when a workflow run ends (last node or Error Trigger).
+  // Authenticated with the shared secret header, not a Bearer token.
+  app.post("/api/campaign-runs/callback", async (req, res) => {
+    try {
+      const secret = process.env.N8N_WEBHOOK_SECRET;
+      if (!secret) {
+        return res.status(503).json({ message: "Run callbacks are not configured (missing N8N_WEBHOOK_SECRET)." });
+      }
+      const provided = req.get("X-Callback-Secret");
+      if (provided !== secret) {
+        return res.status(401).json({ message: "Invalid callback secret" });
+      }
+
+      const parsed = runCallbackSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.errors[0]?.message || "Invalid callback body" });
+      }
+
+      const { runId, status, detail } = parsed.data;
+      const updated = await storage.completeEmailCampaignRun(runId, status, detail ?? null);
+      if (!updated) {
+        return res.status(404).json({ message: "No launch found for that runId" });
+      }
+      res.json({ message: "Run status updated", runId: updated.id, runStatus: updated.runStatus });
+    } catch (error) {
+      res.status(500).json({ message: error instanceof Error ? error.message : "Failed to update run status" });
+    }
+  });
+
   app.get("/api/email-campaign-launches", async (_req, res) => {
     try {
       const launches = await storage.getEmailCampaignLaunches();

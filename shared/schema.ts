@@ -175,8 +175,16 @@ export const emailCampaignLaunches = pgTable("email_campaign_launches", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   campaignId: varchar("campaign_id").notNull(),
   campaignName: text("campaign_name").notNull(), // snapshot at launch time
+  // Whether the webhook CALL was accepted by n8n ("did the request arrive?").
   status: text("status", { enum: ["success", "failed"] }).notNull(),
   detail: text("detail"), // truncated n8n response body or error message
+  // Live status of the n8n WORKFLOW itself ("did the run finish?"). Set to
+  // "in_progress" when the webhook is accepted, then updated by n8n calling
+  // back POST /api/campaign-runs/callback with the launch id (runId). Null for
+  // legacy rows and for launches whose webhook call failed outright.
+  runStatus: text("run_status", { enum: ["in_progress", "finished", "failed"] }),
+  runDetail: text("run_detail"), // message n8n sent in the callback (truncated)
+  runFinishedAt: timestamp("run_finished_at"),
   launchedAt: timestamp("launched_at").notNull().defaultNow(),
 });
 
@@ -261,10 +269,27 @@ export const insertEmailCampaignTemplateSchema = createInsertSchema(emailCampaig
     notes: z.string().optional().nullable(),
   });
 
+// `id` stays insertable: the launch route generates it up front (as the runId
+// sent to n8n) so the callback can find the row later. runFinishedAt is only
+// ever set by the callback update, never on insert.
 export const insertEmailCampaignLaunchSchema = createInsertSchema(emailCampaignLaunches).omit({
-  id: true,
   launchedAt: true,
+  runFinishedAt: true,
 });
+
+// What n8n POSTs back to /api/campaign-runs/callback when the workflow ends.
+// Auth is a shared-secret header, not this body. Over-long details are
+// truncated rather than rejected so a verbose error never blocks the update.
+export const runCallbackSchema = z.object({
+  runId: z.string().min(1, "runId is required"),
+  status: z.enum(["finished", "failed"]),
+  detail: z
+    .string()
+    .optional()
+    .nullable()
+    .transform((d) => (d ? d.slice(0, 4000) : d)),
+});
+export type RunCallback = z.infer<typeof runCallbackSchema>;
 
 // Finds every {{ placeholder }} token used across the given texts so the UI can
 // show which variables n8n must fill, and so they can ride along in the launch

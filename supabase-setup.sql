@@ -158,6 +158,11 @@ CREATE TABLE IF NOT EXISTS email_campaign_launches (
     campaign_name TEXT NOT NULL,
     status TEXT NOT NULL CHECK (status IN ('success', 'failed')),
     detail TEXT,
+    -- Live n8n workflow run tracking: set to 'in_progress' at launch, then
+    -- updated when n8n calls back with 'finished' or 'failed'.
+    run_status TEXT CHECK (run_status IN ('in_progress', 'finished', 'failed')),
+    run_detail TEXT,
+    run_finished_at TIMESTAMP WITH TIME ZONE,
     launched_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 );
 
@@ -171,6 +176,12 @@ ALTER TABLE email_campaign_templates ADD COLUMN IF NOT EXISTS sheet_ids TEXT[] N
 --     filled in), but nullable in the DB so legacy rows still load fine.
 ALTER TABLE email_campaigns ADD COLUMN IF NOT EXISTS raw_sheet_id TEXT;
 ALTER TABLE email_campaign_templates ADD COLUMN IF NOT EXISTS default_raw_sheet_id TEXT;
+
+-- 1c) Live n8n run tracking on the launch history. Nullable so legacy rows
+--     (from before run tracking existed) still load fine.
+ALTER TABLE email_campaign_launches ADD COLUMN IF NOT EXISTS run_status TEXT CHECK (run_status IN ('in_progress', 'finished', 'failed'));
+ALTER TABLE email_campaign_launches ADD COLUMN IF NOT EXISTS run_detail TEXT;
+ALTER TABLE email_campaign_launches ADD COLUMN IF NOT EXISTS run_finished_at TIMESTAMP WITH TIME ZONE;
 
 -- 2) Preserve any old single gid (campaign_info_gid) by copying it into sheet_ids
 --    BEFORE the obsolete columns are dropped, so existing data is never silently

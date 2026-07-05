@@ -72,7 +72,9 @@ every list.
   "followUps": ["Just following up, {{ first_name }}...", "Last note..."],
   "placeholders": ["first_name"],
   "expiryDate": "2026-08-01T00:00:00Z",
-  "triggeredAt": "2026-06-30T09:15:00.000Z"
+  "triggeredAt": "2026-06-30T09:15:00.000Z",
+  "runId": "launch-uuid",
+  "callbackUrl": "https://your-app.example.com/api/campaign-runs/callback"
 }
 ```
 
@@ -96,6 +98,8 @@ Field guide:
 | `placeholders`        | Every `{{ token }}` found across **all** scripts + follow-ups (whole campaign).  |
 | `expiryDate`          | Optional **ISO date-time in UTC** (`YYYY-MM-DDT00:00:00Z`), or `null`.           |
 | `triggeredAt`         | The moment the launch was fired (ISO timestamp), added automatically.            |
+| `runId`               | Unique ID for **this run** — send it back in the callback (see below).           |
+| `callbackUrl`         | Where n8n should `POST` the run result when the workflow ends (see below).       |
 
 > **Two lists, two scripts.** Every campaign has exactly **two main scripts**,
 > one per list, and both are required. Each script is tied by position to a
@@ -132,6 +136,49 @@ To return a custom message from n8n, end the workflow with a **Respond to
 Webhook** node (set the Webhook node's *Respond* option to "Using Respond to
 Webhook node") and send back a small JSON body.
 
+### Live run status — telling the app when the workflow finishes
+
+The response above only says the webhook **arrived**. To make the History tab
+show whether the workflow itself **finished or failed**, have n8n call the app
+back at the end of the run. Until that callback arrives, the launch shows an
+amber **In progress** badge (after 24 hours of silence it becomes
+**No response**).
+
+**Requirements:** the `N8N_WEBHOOK_SECRET` secret must be set in the app — the
+callback endpoint uses it to verify the request really came from your n8n.
+
+**Step 1 — report success.** Add an **HTTP Request** node as the *last* node of
+your workflow (after all the email work is done):
+
+- **Method:** `POST`
+- **URL:** `{{ $json.callbackUrl }}` — or, if the launch data isn't flowing
+  through to the last node, reference the Webhook node directly:
+  `{{ $('Webhook').item.json.body.callbackUrl }}`
+- **Header:** `X-Callback-Secret` = your `N8N_WEBHOOK_SECRET` value
+- **Body (JSON):**
+
+```json
+{
+  "runId": "{{ $('Webhook').item.json.body.runId }}",
+  "status": "finished",
+  "detail": "Queued 240 leads across 2 lists"
+}
+```
+
+**Step 2 — report failure (recommended).** Create a second, tiny workflow that
+starts with an **Error Trigger** node, followed by the same **HTTP Request**
+node but with `"status": "failed"` and a short error message as `detail`. Then,
+in your main workflow's **Settings**, set this as the **Error workflow**. In the
+Error Trigger workflow the original launch data isn't available directly — the
+easiest approach is to stash `runId` and `callbackUrl` into the workflow's
+execution data early on, or read them from
+`{{ $json.execution.error }}` context if your n8n version passes it through.
+If the failure callback can't find the runId, the launch simply stays
+**In progress** and flips to **No response** after 24 hours — nothing breaks.
+
+The callback replies `200` when the status was saved, `401` for a wrong secret,
+and `404` if the `runId` doesn't match any launch.
+
 ---
 
 ## 2. Add the database tables in Supabase
@@ -159,7 +206,7 @@ The app needs one required value and one optional value:
 | Secret               | What it is                                                       |
 | -------------------- | --------------------------------------------------------------- |
 | `N8N_WEBHOOK_URL`    | **Required.** The Production URL from your n8n Webhook node      |
-| `N8N_WEBHOOK_SECRET` | **Optional.** Only needed if you turned on Header Auth in n8n    |
+| `N8N_WEBHOOK_SECRET` | **Optional but recommended.** Used for Header Auth on the launch webhook **and** to verify run-status callbacks from n8n (the History tab's live badges need it) |
 
 ### Development (here in Replit)
 

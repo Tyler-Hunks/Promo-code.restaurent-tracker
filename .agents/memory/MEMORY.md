@@ -1,1 +1,2 @@
 - [Deploy & database operational model](deploy-and-db.md) — prod = Cloudflare Worker + Supabase; wrangler secrets can drift from Replit secrets; migrations manual via SQL Editor; agent shell never sees updated secrets.
+- [Cloudflare Worker deploy method](cloudflare-deploy-method.md) — deploy via temp workflow + tee log (bash tool times out); dev DB unreachable, verify via tsc + prod.

@@ -1,6 +1,6 @@
 // Cloudflare Worker entry point
 import { storage } from "./storage-cloudflare";
-import { insertPromoCodeSchema, bulkGenerateSchema, apiTokenGenerateSchema, deleteBulkByFiltersSchema, insertEmailCampaignSchema, updateEmailCampaignSchema, insertEmailCampaignTemplateSchema, parseExpiresAt, LIST_LABELS } from "../shared/schema";
+import { insertPromoCodeSchema, bulkGenerateSchema, apiTokenGenerateSchema, deleteBulkByFiltersSchema, insertEmailCampaignSchema, updateEmailCampaignSchema, insertEmailCampaignTemplateSchema, runCallbackSchema, parseExpiresAt, LIST_LABELS } from "../shared/schema";
 import { z } from "zod";
 import { buildLaunchRequestBody, triggerN8nWebhook } from "./n8n";
 
@@ -275,6 +275,55 @@ async function handleAPI(request: Request, env: Env): Promise<Response> {
     }
   }
   
+  // Called BY n8n when a workflow run ends (last node or Error Trigger).
+  // No Bearer token — it authenticates with the shared N8N_WEBHOOK_SECRET
+  // header instead, so it must be handled before requireAuth.
+  if (path === '/api/campaign-runs/callback' && method === 'POST') {
+    try {
+      const callbackSecret = env.N8N_WEBHOOK_SECRET;
+      if (!callbackSecret) {
+        return new Response(JSON.stringify({ message: 'Run callbacks are not configured (missing N8N_WEBHOOK_SECRET).' }), {
+          status: 503,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+      const provided = request.headers.get('X-Callback-Secret');
+      if (provided !== callbackSecret) {
+        return new Response(JSON.stringify({ message: 'Invalid callback secret' }), {
+          status: 401,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      const body = await request.json();
+      const parsed = runCallbackSchema.safeParse(body);
+      if (!parsed.success) {
+        return new Response(JSON.stringify({ message: parsed.error.errors[0]?.message || 'Invalid callback body' }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      const { runId, status, detail } = parsed.data;
+      const updated = await storage(env).completeEmailCampaignRun(runId, status, detail ?? null);
+      if (!updated) {
+        return new Response(JSON.stringify({ message: 'No launch found for that runId' }), {
+          status: 404,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+      return new Response(JSON.stringify({ message: 'Run status updated', runId: updated.id, runStatus: updated.runStatus }), {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    } catch (error) {
+      return new Response(JSON.stringify({ message: error instanceof Error ? error.message : 'Failed to update run status' }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+  }
+
   // Check Bearer token for all other API routes
   const authError = await requireAuth(request, env);
   if (authError) return authError;
@@ -680,15 +729,27 @@ async function handleAPI(request: Request, env: Env): Promise<Response> {
         });
       }
 
-      const payload = buildLaunchRequestBody(campaign);
+      // The launch record's id doubles as the runId n8n reports back with, so
+      // it's generated up front and sent along in the payload.
+      const runId = crypto.randomUUID();
+      const callbackUrl = `${url.origin}/api/campaign-runs/callback`;
+      const payload = {
+        ...buildLaunchRequestBody(campaign),
+        runId,
+        callbackUrl,
+      };
       const result = await triggerN8nWebhook(env.N8N_WEBHOOK_URL, env.N8N_WEBHOOK_SECRET, payload);
 
-      // Record every launch attempt (success OR failure) in the history.
+      // Record every launch attempt (success OR failure) in the history. When
+      // the webhook was accepted, the workflow is now running — mark the run
+      // "in_progress" until n8n calls back to say it finished or failed.
       await storageInstance.createEmailCampaignLaunch({
+        id: runId,
         campaignId: campaign.id,
         campaignName: campaign.campaignName,
         status: result.ok ? 'success' : 'failed',
         detail: result.detail ?? result.message ?? null,
+        runStatus: result.ok ? 'in_progress' : null,
       });
 
       if (!result.ok) {

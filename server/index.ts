@@ -3,6 +3,9 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 
 const app = express();
+// Behind Replit's TLS-terminating proxy — trust X-Forwarded-Proto so
+// req.protocol resolves to https (used to build the n8n callback URL).
+app.set("trust proxy", 1);
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 

@@ -552,6 +552,9 @@ export class CloudflareStorage implements IStorage {
       campaignName: r.campaign_name,
       status: r.status,
       detail: r.detail ?? null,
+      runStatus: r.run_status ?? null,
+      runDetail: r.run_detail ?? null,
+      runFinishedAt: r.run_finished_at ? new Date(r.run_finished_at) : null,
       launchedAt: new Date(r.launched_at),
     };
   }
@@ -711,10 +714,13 @@ export class CloudflareStorage implements IStorage {
     const { data: created, error } = await this.supabase
       .from('email_campaign_launches')
       .insert({
+        ...(data.id ? { id: data.id } : {}),
         campaign_id: data.campaignId,
         campaign_name: data.campaignName,
         status: data.status,
         detail: data.detail ?? null,
+        run_status: data.runStatus ?? null,
+        run_detail: data.runDetail ?? null,
       })
       .select()
       .single();
@@ -723,6 +729,28 @@ export class CloudflareStorage implements IStorage {
       throw new Error(`Failed to record launch: ${error.message}`);
     }
     return this.mapEmailCampaignLaunchFromDb(created);
+  }
+
+  async completeEmailCampaignRun(
+    id: string,
+    status: "finished" | "failed",
+    detail?: string | null,
+  ): Promise<EmailCampaignLaunch | undefined> {
+    const { data: updated, error } = await this.supabase
+      .from('email_campaign_launches')
+      .update({
+        run_status: status,
+        run_detail: detail ?? null,
+        run_finished_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select()
+      .single();
+    if (error && error.code !== 'PGRST116') {
+      console.error('completeEmailCampaignRun failed:', error);
+      throw new Error(`Failed to update run status: ${error.message}`);
+    }
+    return updated ? this.mapEmailCampaignLaunchFromDb(updated) : undefined;
   }
 }
 

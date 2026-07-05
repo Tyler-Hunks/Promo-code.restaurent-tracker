@@ -60,6 +60,12 @@ export interface IStorage {
   deleteEmailCampaignTemplate(id: string): Promise<boolean>;
   getEmailCampaignLaunches(): Promise<EmailCampaignLaunch[]>;
   createEmailCampaignLaunch(data: InsertEmailCampaignLaunch): Promise<EmailCampaignLaunch>;
+  // Called when n8n reports back that a workflow run ended (finished/failed).
+  completeEmailCampaignRun(
+    id: string,
+    status: "finished" | "failed",
+    detail?: string | null,
+  ): Promise<EmailCampaignLaunch | undefined>;
 }
 
 export class MemStorage implements IStorage {
@@ -494,17 +500,37 @@ export class MemStorage implements IStorage {
   }
 
   async createEmailCampaignLaunch(data: InsertEmailCampaignLaunch): Promise<EmailCampaignLaunch> {
-    const id = randomUUID();
+    const id = data.id ?? randomUUID();
     const launch: EmailCampaignLaunch = {
       id,
       campaignId: data.campaignId,
       campaignName: data.campaignName,
       status: data.status,
       detail: data.detail ?? null,
+      runStatus: data.runStatus ?? null,
+      runDetail: data.runDetail ?? null,
+      runFinishedAt: null,
       launchedAt: new Date(),
     };
     this.emailCampaignLaunches.set(id, launch);
     return launch;
+  }
+
+  async completeEmailCampaignRun(
+    id: string,
+    status: "finished" | "failed",
+    detail?: string | null,
+  ): Promise<EmailCampaignLaunch | undefined> {
+    const existing = this.emailCampaignLaunches.get(id);
+    if (!existing) return undefined;
+    const updated: EmailCampaignLaunch = {
+      ...existing,
+      runStatus: status,
+      runDetail: detail ?? null,
+      runFinishedAt: new Date(),
+    };
+    this.emailCampaignLaunches.set(id, updated);
+    return updated;
   }
 }
 
@@ -879,12 +905,28 @@ export class DatabaseStorage implements IStorage {
 
   async createEmailCampaignLaunch(data: InsertEmailCampaignLaunch): Promise<EmailCampaignLaunch> {
     const [created] = await db.insert(emailCampaignLaunches).values({
+      ...(data.id ? { id: data.id } : {}),
       campaignId: data.campaignId,
       campaignName: data.campaignName,
       status: data.status,
       detail: data.detail ?? null,
+      runStatus: data.runStatus ?? null,
+      runDetail: data.runDetail ?? null,
     }).returning();
     return created;
+  }
+
+  async completeEmailCampaignRun(
+    id: string,
+    status: "finished" | "failed",
+    detail?: string | null,
+  ): Promise<EmailCampaignLaunch | undefined> {
+    const [updated] = await db
+      .update(emailCampaignLaunches)
+      .set({ runStatus: status, runDetail: detail ?? null, runFinishedAt: new Date() })
+      .where(eq(emailCampaignLaunches.id, id))
+      .returning();
+    return updated || undefined;
   }
 }
 

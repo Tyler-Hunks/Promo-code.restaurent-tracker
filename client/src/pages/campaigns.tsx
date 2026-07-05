@@ -443,6 +443,67 @@ function SheetIdsEditor({
 }
 
 // ---------------------------------------------------------------------------
+// Workflow run status badge
+// ---------------------------------------------------------------------------
+// Shows how the n8n WORKFLOW itself is doing (not just whether the webhook
+// call was accepted). "In progress" until n8n reports back via the callback;
+// runs silent for over 24h are shown as "No response".
+const RUN_STALE_MS = 24 * 60 * 60 * 1000;
+
+function RunBadge({ launch }: { launch: EmailCampaignLaunch }) {
+  if (launch.status === "failed") {
+    return (
+      <Badge variant="destructive" className="shrink-0" data-testid={`badge-run-${launch.id}`}>
+        Send failed
+      </Badge>
+    );
+  }
+  if (launch.runStatus === "in_progress") {
+    const age = Date.now() - new Date(launch.launchedAt).getTime();
+    if (age > RUN_STALE_MS) {
+      return (
+        <Badge variant="outline" className="shrink-0" data-testid={`badge-run-${launch.id}`}>
+          No response
+        </Badge>
+      );
+    }
+    return (
+      <Badge
+        className="shrink-0 bg-amber-500 text-white hover:bg-amber-500 border-transparent"
+        data-testid={`badge-run-${launch.id}`}
+      >
+        <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+        In progress
+      </Badge>
+    );
+  }
+  if (launch.runStatus === "finished") {
+    return (
+      <Badge
+        className="shrink-0 bg-green-600 text-white hover:bg-green-600 border-transparent"
+        data-testid={`badge-run-${launch.id}`}
+      >
+        Finished
+      </Badge>
+    );
+  }
+  if (launch.runStatus === "failed") {
+    return (
+      <Badge variant="destructive" className="shrink-0" data-testid={`badge-run-${launch.id}`}>
+        Workflow failed
+      </Badge>
+    );
+  }
+  // Legacy launches from before run tracking existed — only the webhook result
+  // is known.
+  return (
+    <Badge variant="secondary" className="shrink-0" data-testid={`badge-run-${launch.id}`}>
+      Sent
+    </Badge>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Campaign create/edit form
 // ---------------------------------------------------------------------------
 interface CampaignFormState {
@@ -979,7 +1040,30 @@ export default function Campaigns() {
   });
   const { data: launches = [], isLoading: launchesLoading } = useQuery<EmailCampaignLaunch[]>({
     queryKey: ["/api/email-campaign-launches"],
+    // While any workflow run is still in progress, poll every 15s so the
+    // status flips to Finished/Failed on its own — no manual refresh needed.
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      const hasActive = Array.isArray(data)
+        ? data.some(
+            (l) =>
+              l.runStatus === "in_progress" &&
+              Date.now() - new Date(l.launchedAt).getTime() <= RUN_STALE_MS,
+          )
+        : false;
+      return hasActive ? 15000 : false;
+    },
   });
+
+  // Newest launch per campaign (launches arrive newest-first) so each campaign
+  // card can show how its latest run is doing.
+  const latestLaunchByCampaign = useMemo(() => {
+    const map = new Map<string, EmailCampaignLaunch>();
+    for (const l of launches) {
+      if (!map.has(l.campaignId)) map.set(l.campaignId, l);
+    }
+    return map;
+  }, [launches]);
 
   const createMutation = useMutation({
     mutationFn: async (payload: any) => {
@@ -1356,6 +1440,12 @@ export default function Campaigns() {
                           </span>
                           <span>{formatDate(c.lastLaunchedAt)}</span>
                         </div>
+                        {latestLaunchByCampaign.get(c.id) && (
+                          <div className="flex justify-between gap-2 items-center">
+                            <span className="text-muted-foreground">Last run</span>
+                            <RunBadge launch={latestLaunchByCampaign.get(c.id)!} />
+                          </div>
+                        )}
                         <div className="flex gap-2 pt-2">
                           <Button
                             size="sm"
@@ -1488,13 +1578,8 @@ export default function Campaigns() {
                                 {l.detail ? ` · ${l.detail}` : ""}
                               </p>
                             </div>
-                            <Badge
-                              variant={l.status === "success" ? "default" : "destructive"}
-                              className="shrink-0"
-                            >
-                              {l.status}
-                            </Badge>
-                            {l.detail && (
+                            <RunBadge launch={l} />
+                            {(l.detail || l.runDetail) && (
                               <Button
                                 size="sm"
                                 variant="ghost"
@@ -1868,18 +1953,36 @@ export default function Campaigns() {
               )}
               {selectedLaunch?.campaignName}
             </DialogTitle>
-            <DialogDescription>
-              {formatDateTime(selectedLaunch?.launchedAt)} · {selectedLaunch?.status}
+            <DialogDescription className="flex items-center gap-2">
+              {formatDateTime(selectedLaunch?.launchedAt)}
+              {selectedLaunch && <RunBadge launch={selectedLaunch} />}
             </DialogDescription>
           </DialogHeader>
           {selectedLaunch?.detail ? (
-            <ScrollArea className="h-56 rounded-md border bg-muted/40">
-              <pre className="p-3 text-xs font-mono whitespace-pre-wrap break-all">
-                {selectedLaunch.detail}
-              </pre>
-            </ScrollArea>
+            <div className="space-y-1">
+              <p className="text-xs font-medium text-muted-foreground">
+                Response when the launch was sent
+              </p>
+              <ScrollArea className="h-40 rounded-md border bg-muted/40">
+                <pre className="p-3 text-xs font-mono whitespace-pre-wrap break-all">
+                  {selectedLaunch.detail}
+                </pre>
+              </ScrollArea>
+            </div>
           ) : (
             <p className="text-sm text-muted-foreground">No response detail recorded.</p>
+          )}
+          {selectedLaunch?.runDetail && (
+            <div className="space-y-1">
+              <p className="text-xs font-medium text-muted-foreground">
+                Workflow result{selectedLaunch.runFinishedAt ? ` · ${formatDateTime(selectedLaunch.runFinishedAt)}` : ""}
+              </p>
+              <ScrollArea className="h-40 rounded-md border bg-muted/40">
+                <pre className="p-3 text-xs font-mono whitespace-pre-wrap break-all">
+                  {selectedLaunch.runDetail}
+                </pre>
+              </ScrollArea>
+            </div>
           )}
           <DialogFooter>
             <Button onClick={() => setSelectedLaunch(null)} data-testid="button-close-launch-detail">
