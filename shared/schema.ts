@@ -138,6 +138,10 @@ export const emailCampaigns = pgTable("email_campaigns", {
   // Tied to the main scripts by position: sheetIds[0] ↔ mainScripts[0]
   // ("A: Yes Location"), sheetIds[1] ↔ mainScripts[1] ("B: No Location").
   sheetIds: text("sheet_ids").array().notNull().default(sql`'{}'::text[]`),
+  // The tab gid holding the raw, unprocessed leads. Separate from the two
+  // list sheets above — n8n reads new leads from here. Nullable in the DB for
+  // legacy rows, but required by the insert schema and the launch pre-check.
+  rawSheetId: text("raw_sheet_id"),
   // The 2 main scripts — one per list. Index 0 = "A: Yes Location", index 1 =
   // "B: No Location". Each pairs with the same-index Sheet ID.
   mainScripts: text("main_scripts").array().notNull().default(sql`'{}'::text[]`),
@@ -156,7 +160,9 @@ export const emailCampaignTemplates = pgTable("email_campaign_templates", {
   // Optional on a template — you may reuse just the scripts.
   documentId: text("document_id"),
   sheetIds: text("sheet_ids").array().notNull().default(sql`'{}'::text[]`),
-  // Up to 2 default main-script variants (A, B), same as email_campaigns.
+  // Optional default for the raw-leads tab gid, same as email_campaigns.
+  defaultRawSheetId: text("default_raw_sheet_id"),
+  // Up to 2 default main scripts (one per list), same as email_campaigns.
   defaultMainScripts: text("default_main_scripts").array().notNull().default(sql`'{}'::text[]`),
   defaultFollowUps: text("default_follow_ups").array().notNull().default(sql`'{}'::text[]`),
   notes: text("notes"),
@@ -184,6 +190,13 @@ const sheetIdsField = z
     z.string().regex(/^\d+$/, "Each Sheet ID (gid) should be a number, e.g. 0 or 123456789"),
   )
   .min(2, "Add at least 2 Sheet IDs (gids)");
+
+// The raw-leads tab gid — required on every campaign, so n8n always knows
+// where to pull unprocessed leads from.
+const rawSheetIdField = z
+  .string()
+  .min(1, "The Raw leads Sheet ID is required")
+  .regex(/^\d+$/, "The Raw leads Sheet ID (gid) should be a number, e.g. 0 or 123456789");
 
 // Human labels for the two lead lists, tied by position to the Sheet IDs and
 // main scripts: index 0 = first sheet, index 1 = second sheet. These labels
@@ -215,6 +228,7 @@ export const insertEmailCampaignSchema = createInsertSchema(emailCampaigns)
     campaignType: z.string().optional().nullable(),
     documentId: documentIdField,
     sheetIds: sheetIdsField,
+    rawSheetId: rawSheetIdField,
     mainScripts: mainScriptsField,
     followUps: z.array(z.string()).optional().default([]),
     expiryDate: z
@@ -237,6 +251,11 @@ export const insertEmailCampaignTemplateSchema = createInsertSchema(emailCampaig
       .array(z.string().regex(/^\d+$/, "Each Sheet ID (gid) should be a number"))
       .optional()
       .default([]),
+    defaultRawSheetId: z
+      .string()
+      .regex(/^\d+$/, "The Raw leads Sheet ID (gid) should be a number")
+      .optional()
+      .nullable(),
     defaultMainScripts: defaultMainScriptsField,
     defaultFollowUps: z.array(z.string()).optional().default([]),
     notes: z.string().optional().nullable(),
@@ -377,6 +396,8 @@ export function buildLaunchPayload(campaign: EmailCampaign) {
     campaignType: campaign.campaignType ?? null,
     documentId: campaign.documentId,
     sheetIds,
+    // The tab gid n8n pulls raw, unprocessed leads from.
+    rawSheetId: campaign.rawSheetId ?? null,
     lists,
     followUps,
     // Combined placeholders across every variant + the shared follow-ups.

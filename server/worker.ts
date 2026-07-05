@@ -657,6 +657,17 @@ async function handleAPI(request: Request, env: Env): Promise<Response> {
         });
       }
 
+      // The raw-leads Sheet ID must be set, so n8n knows where to pull
+      // unprocessed leads from.
+      if (!campaign.rawSheetId?.trim()) {
+        return new Response(JSON.stringify({
+          message: "This campaign needs a Raw leads Sheet ID before it can launch. Open it, add the raw sheet's gid, then try again.",
+        }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
       // Both main scripts (one per list) must be filled in, otherwise a list
       // in the payload would have no message and n8n would email nobody on it.
       const scripts = campaign.mainScripts ?? [];

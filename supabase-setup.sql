@@ -127,6 +127,7 @@ CREATE TABLE IF NOT EXISTS email_campaigns (
     campaign_type TEXT,
     document_id TEXT NOT NULL,
     sheet_ids TEXT[] NOT NULL DEFAULT '{}',
+    raw_sheet_id TEXT,
     main_scripts TEXT[] NOT NULL DEFAULT '{}',
     follow_ups TEXT[] NOT NULL DEFAULT '{}',
     expiry_date DATE,
@@ -142,6 +143,7 @@ CREATE TABLE IF NOT EXISTS email_campaign_templates (
     campaign_type TEXT,
     document_id TEXT,
     sheet_ids TEXT[] NOT NULL DEFAULT '{}',
+    default_raw_sheet_id TEXT,
     default_main_scripts TEXT[] NOT NULL DEFAULT '{}',
     default_follow_ups TEXT[] NOT NULL DEFAULT '{}',
     notes TEXT,
@@ -163,6 +165,12 @@ CREATE TABLE IF NOT EXISTS email_campaign_launches (
 -- 1) Add the new array column first.
 ALTER TABLE email_campaigns ADD COLUMN IF NOT EXISTS sheet_ids TEXT[] NOT NULL DEFAULT '{}';
 ALTER TABLE email_campaign_templates ADD COLUMN IF NOT EXISTS sheet_ids TEXT[] NOT NULL DEFAULT '{}';
+
+-- 1b) Raw-leads tab gid. Required by the app for every campaign (new campaigns
+--     can't be saved without it, and old campaigns can't launch until it's
+--     filled in), but nullable in the DB so legacy rows still load fine.
+ALTER TABLE email_campaigns ADD COLUMN IF NOT EXISTS raw_sheet_id TEXT;
+ALTER TABLE email_campaign_templates ADD COLUMN IF NOT EXISTS default_raw_sheet_id TEXT;
 
 -- 2) Preserve any old single gid (campaign_info_gid) by copying it into sheet_ids
 --    BEFORE the obsolete columns are dropped, so existing data is never silently

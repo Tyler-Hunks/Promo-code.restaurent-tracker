@@ -52,6 +52,7 @@ every list.
   "campaignType": "cold-email",
   "documentId": "google-sheet-document-id",
   "sheetIds": ["0", "123456789"],
+  "rawSheetId": "555555555",
   "lists": [
     {
       "label": "A: Yes Location",
@@ -84,6 +85,7 @@ Field guide:
 | `campaignType`        | A free-text label (e.g. `cold-email`), or `null`.                                |
 | `documentId`          | **One** Google Sheet file — the long ID from the spreadsheet URL.                |
 | `sheetIds`            | An **array** of tab gids inside that document (always at least 2).               |
+| `rawSheetId`          | The tab gid holding the **raw, unprocessed leads** — required on every campaign. |
 | `lists`               | The two lead lists — one per main script.                                        |
 | `lists[].label`       | `"A: Yes Location"` for the first list, `"B: No Location"` for the second.      |
 | `lists[].sheetId`     | The single tab gid this list emails (the same-index entry from `sheetIds`).      |
@@ -206,7 +208,8 @@ The page has three tabs:
 - **Campaigns** — your campaigns as cards. Each shows its status, Document ID,
   how many Sheet IDs and follow-ups it has, and how many placeholders were found.
   - **New campaign** — fill in the name, the **Google Sheet Document ID**, at
-    least **2 Sheet IDs (tab gids)**, **both main scripts** (one per list:
+    least **2 Sheet IDs (tab gids)**, the **Raw leads Sheet ID** (the tab gid
+    holding your raw, unprocessed leads), **both main scripts** (one per list:
     "A: Yes Location" sends to the first sheet, "B: No Location" to the second),
     and any follow-ups. The **expiry date** is typed as `YYYY-MM-DD` (or left
     blank) and is sent to n8n as an ISO date-time (`YYYY-MM-DDT00:00:00Z`). It's
@@ -225,7 +228,9 @@ The page has three tabs:
   prefill a new campaign.
 
 > Tips: a campaign can only launch once it has a Document ID, **at least 2
-> Sheet IDs**, and **both main scripts** filled in — this protects against
-> sending an incomplete request. Campaigns can be created and edited, but
+> Sheet IDs**, a **Raw leads Sheet ID**, and **both main scripts** filled in —
+> this protects against sending an incomplete request. Campaigns made before
+> this field existed must be edited to add their Raw leads Sheet ID before they
+> can launch again. Campaigns can be created and edited, but
 > **not deleted**, so your launch history is always kept. Templates **can** be
 > deleted.

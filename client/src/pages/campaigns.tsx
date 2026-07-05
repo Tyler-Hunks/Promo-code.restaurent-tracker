@@ -450,6 +450,7 @@ interface CampaignFormState {
   campaignType: string;
   documentId: string;
   sheetIds: string[];
+  rawSheetId: string;
   mainScripts: string[];
   followUps: string[];
   expiryDate: string;
@@ -470,6 +471,7 @@ function emptyCampaignState(): CampaignFormState {
     campaignType: "",
     documentId: "",
     sheetIds: ["", ""],
+    rawSheetId: "",
     mainScripts: ["", ""],
     followUps: [],
     expiryDate: "",
@@ -485,6 +487,7 @@ function stateFromCampaign(c: EmailCampaign): CampaignFormState {
     campaignType: c.campaignType ?? "",
     documentId: c.documentId ?? "",
     sheetIds,
+    rawSheetId: c.rawSheetId ?? "",
     mainScripts,
     followUps: c.followUps ?? [],
     expiryDate: c.expiryDate ?? "",
@@ -498,6 +501,7 @@ function buildCampaignPayload(state: CampaignFormState) {
     campaignType: state.campaignType.trim() || null,
     documentId: state.documentId.trim(),
     sheetIds: state.sheetIds.map((s) => s.trim()).filter(Boolean),
+    rawSheetId: state.rawSheetId.trim(),
     mainScripts: normalizeVariants(state.mainScripts),
     followUps: state.followUps.map((f) => f.trim()).filter(Boolean),
     expiryDate: state.expiryDate.trim() || null,
@@ -533,6 +537,7 @@ function CampaignForm({
       campaignType: t.campaignType ?? "",
       documentId: t.documentId ?? "",
       sheetIds: t.sheetIds && t.sheetIds.length > 0 ? [...t.sheetIds] : ["", ""],
+      rawSheetId: t.defaultRawSheetId ?? "",
       mainScripts:
         t.defaultMainScripts && t.defaultMainScripts.length > 0
           ? [...t.defaultMainScripts]
@@ -566,6 +571,15 @@ function CampaignForm({
     }
     if (sheetIds.some((s) => !/^\d+$/.test(s))) {
       setError("Each Sheet ID (gid) must be a number, e.g. 0 or 123456789.");
+      return;
+    }
+    const rawSheetId = state.rawSheetId.trim();
+    if (!rawSheetId) {
+      setError("The Raw leads Sheet ID is required — it tells n8n where to pull unprocessed leads from.");
+      return;
+    }
+    if (!/^\d+$/.test(rawSheetId)) {
+      setError("The Raw leads Sheet ID (gid) must be a number, e.g. 0 or 123456789.");
       return;
     }
     const mainScripts = state.mainScripts.map((s) => s.trim());
@@ -651,6 +665,21 @@ function CampaignForm({
       </div>
 
       <div className="space-y-1.5">
+        <Label htmlFor="rawSheetId">Raw leads Sheet ID (tab gid) *</Label>
+        <p className="text-xs text-muted-foreground">
+          The tab holding your raw, unprocessed leads — n8n pulls new leads from
+          here. Required, just like the two list scripts.
+        </p>
+        <Input
+          id="rawSheetId"
+          value={state.rawSheetId}
+          onChange={(e) => update({ rawSheetId: e.target.value })}
+          placeholder="e.g. 0 or 123456789"
+          data-testid="input-raw-sheet-id"
+        />
+      </div>
+
+      <div className="space-y-1.5">
         <Label>Main scripts *</Label>
         <p className="text-xs text-muted-foreground">
           One message per list — both are required. To try different versions of a
@@ -731,6 +760,7 @@ interface TemplateFormState {
   campaignType: string;
   documentId: string;
   sheetIds: string[];
+  defaultRawSheetId: string;
   defaultMainScripts: string[];
   defaultFollowUps: string[];
   notes: string;
@@ -748,6 +778,7 @@ function TemplateForm({
     campaignType: "",
     documentId: "",
     sheetIds: [],
+    defaultRawSheetId: "",
     defaultMainScripts: [""],
     defaultFollowUps: [],
     notes: "",
@@ -775,6 +806,11 @@ function TemplateForm({
       setError("Each Sheet ID (gid) must be a number.");
       return;
     }
+    const defaultRawSheetId = state.defaultRawSheetId.trim();
+    if (defaultRawSheetId && !/^\d+$/.test(defaultRawSheetId)) {
+      setError("The Raw leads Sheet ID (gid) must be a number.");
+      return;
+    }
     const defaultMainScripts = normalizeVariants(state.defaultMainScripts);
     setError("");
     onSubmit({
@@ -782,6 +818,7 @@ function TemplateForm({
       campaignType: state.campaignType.trim() || null,
       documentId: doc || null,
       sheetIds,
+      defaultRawSheetId: defaultRawSheetId || null,
       defaultMainScripts,
       defaultFollowUps: state.defaultFollowUps.map((f) => f.trim()).filter(Boolean),
       notes: state.notes.trim() || null,
@@ -826,6 +863,19 @@ function TemplateForm({
         <SheetIdsEditor
           value={state.sheetIds}
           onChange={(sheetIds) => update({ sheetIds })}
+        />
+      </div>
+      <div className="space-y-1.5">
+        <Label htmlFor="tplRawSheetId">Default Raw leads Sheet ID (tab gid)</Label>
+        <p className="text-xs text-muted-foreground">
+          Optional default — new campaigns start with this raw-leads tab gid.
+        </p>
+        <Input
+          id="tplRawSheetId"
+          value={state.defaultRawSheetId}
+          onChange={(e) => update({ defaultRawSheetId: e.target.value })}
+          placeholder="e.g. 0 or 123456789"
+          data-testid="input-template-raw-sheet-id"
         />
       </div>
       <div className="space-y-1.5">
@@ -1066,6 +1116,7 @@ export default function Campaigns() {
       campaignType: t.campaignType ?? null,
       documentId: t.documentId ?? "",
       sheetIds: t.sheetIds ?? [],
+      rawSheetId: t.defaultRawSheetId ?? null,
       mainScripts: t.defaultMainScripts ?? [],
       followUps: t.defaultFollowUps ?? [],
       expiryDate: null,

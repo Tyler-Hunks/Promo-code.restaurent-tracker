@@ -519,6 +519,7 @@ export class CloudflareStorage implements IStorage {
       campaignType: r.campaign_type ?? null,
       documentId: r.document_id,
       sheetIds: r.sheet_ids ?? [],
+      rawSheetId: r.raw_sheet_id ?? null,
       mainScripts: r.main_scripts ?? [],
       followUps: r.follow_ups ?? [],
       expiryDate: r.expiry_date ?? null,
@@ -536,6 +537,7 @@ export class CloudflareStorage implements IStorage {
       campaignType: r.campaign_type ?? null,
       documentId: r.document_id ?? null,
       sheetIds: r.sheet_ids ?? [],
+      defaultRawSheetId: r.default_raw_sheet_id ?? null,
       defaultMainScripts: r.default_main_scripts ?? [],
       defaultFollowUps: r.default_follow_ups ?? [],
       notes: r.notes ?? null,
@@ -587,6 +589,7 @@ export class CloudflareStorage implements IStorage {
         campaign_type: data.campaignType ?? null,
         document_id: data.documentId,
         sheet_ids: data.sheetIds ?? [],
+        raw_sheet_id: data.rawSheetId ?? null,
         main_scripts: data.mainScripts ?? [],
         follow_ups: data.followUps ?? [],
         expiry_date: data.expiryDate ?? null,
@@ -608,6 +611,7 @@ export class CloudflareStorage implements IStorage {
     if (data.campaignType !== undefined) patch.campaign_type = data.campaignType ?? null;
     if (data.documentId !== undefined) patch.document_id = data.documentId;
     if (data.sheetIds !== undefined) patch.sheet_ids = data.sheetIds ?? [];
+    if (data.rawSheetId !== undefined) patch.raw_sheet_id = data.rawSheetId ?? null;
     if (data.mainScripts !== undefined) patch.main_scripts = data.mainScripts ?? [];
     if (data.followUps !== undefined) patch.follow_ups = data.followUps ?? [];
     if (data.expiryDate !== undefined) patch.expiry_date = data.expiryDate ?? null;
@@ -664,6 +668,7 @@ export class CloudflareStorage implements IStorage {
         campaign_type: data.campaignType ?? null,
         document_id: data.documentId ?? null,
         sheet_ids: data.sheetIds ?? [],
+        default_raw_sheet_id: data.defaultRawSheetId ?? null,
         default_main_scripts: data.defaultMainScripts ?? [],
         default_follow_ups: data.defaultFollowUps ?? [],
         notes: data.notes ?? null,

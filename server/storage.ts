@@ -415,6 +415,7 @@ export class MemStorage implements IStorage {
       campaignType: data.campaignType ?? null,
       documentId: data.documentId,
       sheetIds: data.sheetIds ?? [],
+      rawSheetId: data.rawSheetId ?? null,
       mainScripts: data.mainScripts ?? [],
       followUps: data.followUps ?? [],
       expiryDate: data.expiryDate ?? null,
@@ -436,6 +437,7 @@ export class MemStorage implements IStorage {
       campaignType: data.campaignType !== undefined ? (data.campaignType ?? null) : existing.campaignType,
       documentId: data.documentId ?? existing.documentId,
       sheetIds: data.sheetIds !== undefined ? (data.sheetIds ?? []) : existing.sheetIds,
+      rawSheetId: data.rawSheetId !== undefined ? (data.rawSheetId ?? null) : existing.rawSheetId,
       mainScripts: data.mainScripts !== undefined ? (data.mainScripts ?? []) : existing.mainScripts,
       followUps: data.followUps !== undefined ? (data.followUps ?? []) : existing.followUps,
       expiryDate: data.expiryDate !== undefined ? (data.expiryDate ?? null) : existing.expiryDate,
@@ -471,6 +473,7 @@ export class MemStorage implements IStorage {
       campaignType: data.campaignType ?? null,
       documentId: data.documentId ?? null,
       sheetIds: data.sheetIds ?? [],
+      defaultRawSheetId: data.defaultRawSheetId ?? null,
       defaultMainScripts: data.defaultMainScripts ?? [],
       defaultFollowUps: data.defaultFollowUps ?? [],
       notes: data.notes ?? null,
@@ -809,6 +812,7 @@ export class DatabaseStorage implements IStorage {
       campaignType: data.campaignType ?? null,
       documentId: data.documentId,
       sheetIds: data.sheetIds ?? [],
+      rawSheetId: data.rawSheetId ?? null,
       mainScripts: data.mainScripts ?? [],
       followUps: data.followUps ?? [],
       expiryDate: data.expiryDate ?? null,
@@ -823,6 +827,7 @@ export class DatabaseStorage implements IStorage {
     if (data.campaignType !== undefined) patch.campaignType = data.campaignType ?? null;
     if (data.documentId !== undefined) patch.documentId = data.documentId;
     if (data.sheetIds !== undefined) patch.sheetIds = data.sheetIds ?? [];
+    if (data.rawSheetId !== undefined) patch.rawSheetId = data.rawSheetId ?? null;
     if (data.mainScripts !== undefined) patch.mainScripts = data.mainScripts ?? [];
     if (data.followUps !== undefined) patch.followUps = data.followUps ?? [];
     if (data.expiryDate !== undefined) patch.expiryDate = data.expiryDate ?? null;
@@ -855,6 +860,7 @@ export class DatabaseStorage implements IStorage {
       campaignType: data.campaignType ?? null,
       documentId: data.documentId ?? null,
       sheetIds: data.sheetIds ?? [],
+      defaultRawSheetId: data.defaultRawSheetId ?? null,
       defaultMainScripts: data.defaultMainScripts ?? [],
       defaultFollowUps: data.defaultFollowUps ?? [],
       notes: data.notes ?? null,
