@@ -293,6 +293,26 @@ CREATE POLICY "Allow all operations" ON email_campaigns FOR ALL USING (true) WIT
 CREATE POLICY "Allow all operations" ON email_campaign_templates FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all operations" ON email_campaign_launches FOR ALL USING (true) WITH CHECK (true);
 
+-- ========================================
+-- GOOGLE OAUTH TOKENS (raw-sheet row check before launching)
+-- Single-row table (id = 'default') holding the one connected Google account
+-- used to read raw-lead counts from Google Sheets.
+-- ========================================
+CREATE TABLE IF NOT EXISTS google_oauth_tokens (
+    id TEXT PRIMARY KEY DEFAULT 'default',
+    refresh_token TEXT NOT NULL,
+    access_token TEXT,
+    access_token_expires_at TIMESTAMP WITH TIME ZONE,
+    connected_email TEXT,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+
+-- RLS: same pattern as the other tables — the app layer (Bearer tokens)
+-- enforces access; the anon key used by the Worker needs read/write.
+ALTER TABLE google_oauth_tokens ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow all operations" ON google_oauth_tokens;
+CREATE POLICY "Allow all operations" ON google_oauth_tokens FOR ALL USING (true) WITH CHECK (true);
+
 -- Tell Supabase's API layer (PostgREST) to reload its cached schema. Without
 -- this, freshly added columns (e.g. default_main_scripts) can report
 -- "Could not find the '<col>' column ... in the schema cache" from the deployed

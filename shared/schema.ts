@@ -192,6 +192,26 @@ export const emailCampaignLaunches = pgTable("email_campaign_launches", {
   launchedAt: timestamp("launched_at").notNull().defaultNow(),
 });
 
+// Google OAuth connection for the raw-sheet row check. Single-row table
+// (id = 'default'): the app is connected to exactly one Google account —
+// the one that owns/has access to the lead spreadsheets.
+export const googleOauthTokens = pgTable("google_oauth_tokens", {
+  id: text("id").primaryKey().default("default"),
+  refreshToken: text("refresh_token").notNull(),
+  accessToken: text("access_token"),
+  accessTokenExpiresAt: timestamp("access_token_expires_at"),
+  connectedEmail: text("connected_email"),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export type GoogleOauthTokens = typeof googleOauthTokens.$inferSelect;
+export type SaveGoogleTokens = {
+  refreshToken: string;
+  accessToken?: string | null;
+  accessTokenExpiresAt?: Date | null;
+  connectedEmail?: string | null;
+};
+
 // Lenient format checks so obvious typos are caught without rejecting valid IDs.
 const documentIdField = z
   .string()

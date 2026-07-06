@@ -5,6 +5,23 @@ import { insertPromoCodeSchema, bulkGenerateSchema, campaignGenerateSchema, csvI
 import crypto from "crypto";
 import { z } from "zod";
 import { buildLaunchRequestBody, triggerN8nWebhook } from "./n8n";
+import {
+  parseOAuthClientJson,
+  createOAuthState,
+  verifyOAuthState,
+  buildGoogleAuthUrl,
+  exchangeCodeForTokens,
+  performRawSheetCheck,
+} from "./google";
+
+// The OAuth client file the user downloaded from Google Cloud Console.
+// GOOGLE_SERVICE_ACCOUNT_JSON is a legacy fallback — the same file was first
+// saved under that (misleading) name.
+function getGoogleClient() {
+  return parseOAuthClientJson(
+    process.env.GOOGLE_OAUTH_CLIENT_JSON || process.env.GOOGLE_SERVICE_ACCOUNT_JSON,
+  );
+}
 
 // Generate secure token
 function generateSecureToken(): string {
@@ -154,6 +171,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // Skip Bearer auth for the n8n run callback — it authenticates with the
     // shared N8N_WEBHOOK_SECRET header instead (checked inside the route).
     if (req.path === '/campaign-runs/callback') {
+      return next();
+    }
+    // Skip Bearer auth for the Google OAuth redirect target — the browser
+    // arrives here straight from Google with no Authorization header. It is
+    // protected by the HMAC-signed state parameter instead.
+    if (req.path === '/google/callback') {
       return next();
     }
     requireAuth(req, res, next);
@@ -750,6 +773,101 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/email-campaigns/:id/launch", (req, res) => fireCampaignWebhook(req, res, "launch"));
   app.post("/api/email-campaigns/:id/relaunch", (req, res) => fireCampaignWebhook(req, res, "relaunch"));
+
+  // ==========================================================================
+  // Google Sheets connection (raw-sheet row check before a launch)
+  // ==========================================================================
+
+  // Is a Google account connected? (Bearer-protected by the /api middleware.)
+  app.get("/api/google/status", async (_req, res) => {
+    try {
+      const tokens = await storage.getGoogleTokens();
+      res.json({ connected: !!tokens, email: tokens?.connectedEmail ?? null });
+    } catch (error) {
+      res.status(500).json({ message: error instanceof Error ? error.message : "Failed to check Google connection" });
+    }
+  });
+
+  // Returns the Google consent-screen URL. The frontend redirects the browser
+  // there; Google sends the user back to /api/google/callback.
+  app.get("/api/google/auth-url", async (req, res) => {
+    try {
+      const client = getGoogleClient();
+      if (!client) {
+        return res.status(503).json({
+          message: "Google connection isn't configured yet. Add the OAuth client file (GOOGLE_OAUTH_CLIENT_JSON).",
+        });
+      }
+      const redirectUri = `${req.protocol}://${req.get("host")}/api/google/callback`;
+      const state = await createOAuthState(client.clientSecret);
+      res.json({ url: buildGoogleAuthUrl(client.clientId, redirectUri, state) });
+    } catch (error) {
+      res.status(500).json({ message: error instanceof Error ? error.message : "Failed to build Google auth URL" });
+    }
+  });
+
+  // Google redirects here after consent. No Bearer token (browser redirect) —
+  // the HMAC-signed state param proves the flow started on our server.
+  app.get("/api/google/callback", async (req, res) => {
+    try {
+      const client = getGoogleClient();
+      if (!client) return res.redirect("/campaigns?google=error");
+      // User clicked "Cancel" on the consent screen, or Google errored.
+      if (req.query.error || typeof req.query.code !== "string") {
+        return res.redirect("/campaigns?google=error");
+      }
+      const stateOk = await verifyOAuthState(
+        typeof req.query.state === "string" ? req.query.state : null,
+        client.clientSecret,
+      );
+      if (!stateOk) return res.redirect("/campaigns?google=error");
+
+      const redirectUri = `${req.protocol}://${req.get("host")}/api/google/callback`;
+      const result = await exchangeCodeForTokens(client, req.query.code, redirectUri);
+      if (!result.ok) return res.redirect("/campaigns?google=error");
+
+      // Google only returns a refresh_token on the first consent (we force it
+      // with prompt=consent, but keep the old one as a fallback anyway).
+      const existing = await storage.getGoogleTokens();
+      const refreshToken = result.refreshToken ?? existing?.refreshToken;
+      if (!refreshToken) return res.redirect("/campaigns?google=error");
+
+      await storage.saveGoogleTokens({
+        refreshToken,
+        accessToken: result.accessToken,
+        accessTokenExpiresAt: result.expiresAt,
+        connectedEmail: result.email ?? existing?.connectedEmail ?? null,
+      });
+      res.redirect("/campaigns?google=connected");
+    } catch (error) {
+      console.error("Google OAuth callback failed:", error);
+      res.redirect("/campaigns?google=error");
+    }
+  });
+
+  // Counts data rows in the campaign's raw-leads tab. Purely informational —
+  // the launch dialog shows the result but never blocks the launch.
+  app.get("/api/email-campaigns/:id/raw-sheet-count", async (req, res) => {
+    try {
+      const campaign = await storage.getEmailCampaign(req.params.id);
+      if (!campaign) {
+        return res.status(404).json({ message: "Campaign not found" });
+      }
+      if (!campaign.documentId || !campaign.rawSheetId?.trim()) {
+        return res.status(400).json({ message: "This campaign has no Document ID or Raw leads Sheet ID." });
+      }
+      const client = getGoogleClient();
+      if (!client) {
+        return res.status(503).json({
+          message: "Google connection isn't configured yet. Add the OAuth client file (GOOGLE_OAUTH_CLIENT_JSON).",
+        });
+      }
+      const result = await performRawSheetCheck(storage, client, campaign.documentId, campaign.rawSheetId.trim());
+      res.json(result);
+    } catch (error) {
+      res.status(500).json({ message: error instanceof Error ? error.message : "Failed to check the raw sheet" });
+    }
+  });
 
   // Called BY n8n when a workflow run ends (last node or Error Trigger).
   // Authenticated with the shared secret header, not a Bearer token.

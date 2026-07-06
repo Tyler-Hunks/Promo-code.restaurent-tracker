@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -63,7 +63,15 @@ import {
   History,
   Eye,
   ExternalLink,
+  AlertTriangle,
 } from "lucide-react";
+
+// Response of GET /api/email-campaigns/:id/raw-sheet-count — either no Google
+// account is connected yet, or a row count, or a reason we couldn't count.
+type RawSheetCheck =
+  | { connected: false }
+  | { connected: true; rows: number; email: string | null }
+  | { connected: true; error: "no_access" | "tab_not_found" | "api_error"; email: string | null };
 
 // Direct link to a specific tab of a Google Sheet, built from the campaign's
 // Document ID + RAW leads tab gid.
@@ -1065,6 +1073,64 @@ export default function Campaigns() {
   const { data: campaigns = [], isLoading } = useQuery<EmailCampaign[]>({
     queryKey: ["/api/email-campaigns"],
   });
+
+  // Raw-sheet lead count — only checked when the Launch / New Launch dialog is
+  // open (a relaunch re-uses already-processed leads, so no check needed).
+  // staleTime 0 so re-opening the dialog always fetches a fresh count.
+  const rawCheckEnabled =
+    !!launchTarget &&
+    launchMode !== "relaunch" &&
+    !!launchTarget.documentId &&
+    !!launchTarget.rawSheetId?.trim();
+  const rawSheetCheck = useQuery<RawSheetCheck>({
+    queryKey: ["/api/email-campaigns", launchTarget?.id ?? "", "raw-sheet-count"],
+    enabled: rawCheckEnabled,
+    staleTime: 0,
+    gcTime: 0,
+    retry: false,
+  });
+
+  // Kicks off the one-time "Connect Google Sheets" flow: ask the server for
+  // Google's consent-screen URL, then send the browser there.
+  const [connectingGoogle, setConnectingGoogle] = useState(false);
+  const connectGoogle = async () => {
+    setConnectingGoogle(true);
+    try {
+      const res = await apiRequest("GET", "/api/google/auth-url");
+      const { url } = await res.json();
+      window.location.href = url;
+    } catch (error) {
+      setConnectingGoogle(false);
+      toast({
+        title: "Couldn't start the Google connection",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // After Google redirects back (/campaigns?google=connected|error), show the
+  // outcome once and clean the URL so refreshes don't re-toast.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const googleResult = params.get("google");
+    if (!googleResult) return;
+    if (googleResult === "connected") {
+      toast({
+        title: "Google Sheets connected",
+        description: "Lead counts will now show automatically when you launch.",
+      });
+    } else {
+      toast({
+        title: "Google connection failed",
+        description: "The connection didn't complete. Please try again.",
+        variant: "destructive",
+      });
+    }
+    params.delete("google");
+    const rest = params.toString();
+    window.history.replaceState({}, "", window.location.pathname + (rest ? `?${rest}` : ""));
+  }, [toast]);
   const { data: templates = [] } = useQuery<EmailCampaignTemplate[]>({
     queryKey: ["/api/email-campaign-templates"],
   });
@@ -1950,6 +2016,69 @@ export default function Campaigns() {
               <p className="text-xs text-muted-foreground">
                 A <span className="font-mono">triggeredAt</span> timestamp is added automatically.
               </p>
+
+              {/* Raw-sheet lead count — informational only, never blocks launching */}
+              {launchMode !== "relaunch" && (
+                <div data-testid="raw-sheet-check">
+                  {!rawCheckEnabled ? null : rawSheetCheck.isFetching ? (
+                    <div className="flex items-center gap-2 rounded-md border bg-muted/40 p-2.5 text-xs text-muted-foreground">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" />
+                      Checking the raw leads sheet…
+                    </div>
+                  ) : rawSheetCheck.isError ? (
+                    <div className="flex items-center gap-2 rounded-md border bg-muted/40 p-2.5 text-xs text-muted-foreground">
+                      <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                      Couldn't check the raw leads sheet. You can still launch.
+                    </div>
+                  ) : rawSheetCheck.data && !rawSheetCheck.data.connected ? (
+                    <div className="flex flex-wrap items-center gap-2 rounded-md border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 p-2.5 text-xs text-amber-800 dark:text-amber-200">
+                      <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                      <span className="flex-1 min-w-[10rem]">
+                        Connect Google Sheets to see how many leads are waiting before you launch.
+                      </span>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-7 text-xs"
+                        onClick={connectGoogle}
+                        disabled={connectingGoogle}
+                        data-testid="button-connect-google"
+                      >
+                        {connectingGoogle ? (
+                          <Loader2 className="h-3 w-3 mr-1.5 animate-spin" />
+                        ) : (
+                          <ExternalLink className="h-3 w-3 mr-1.5" />
+                        )}
+                        Connect Google
+                      </Button>
+                    </div>
+                  ) : rawSheetCheck.data && "error" in rawSheetCheck.data ? (
+                    <div className="flex items-center gap-2 rounded-md border bg-muted/40 p-2.5 text-xs text-muted-foreground">
+                      <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                      {rawSheetCheck.data.error === "no_access"
+                        ? `The connected Google account${rawSheetCheck.data.email ? ` (${rawSheetCheck.data.email})` : ""} doesn't have access to this sheet. You can still launch.`
+                        : rawSheetCheck.data.error === "tab_not_found"
+                          ? "Couldn't find the raw leads tab — double-check the Raw leads Sheet ID. You can still launch."
+                          : "Couldn't check the raw leads sheet right now. You can still launch."}
+                    </div>
+                  ) : rawSheetCheck.data && "rows" in rawSheetCheck.data ? (
+                    rawSheetCheck.data.rows > 0 ? (
+                      <div className="flex items-center gap-2 rounded-md border border-green-300 dark:border-green-800 bg-green-50 dark:bg-green-950/40 p-2.5 text-xs text-green-800 dark:text-green-200">
+                        <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                        {rawSheetCheck.data.rows.toLocaleString()}{" "}
+                        {rawSheetCheck.data.rows === 1 ? "lead" : "leads"} found in the raw sheet.
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 rounded-md border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 p-2.5 text-xs text-amber-800 dark:text-amber-200">
+                        <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                        The raw leads sheet looks empty — the workflow may find nothing new to
+                        send. You can still launch.
+                      </div>
+                    )
+                  ) : null}
+                </div>
+              )}
             </div>
           )}
           <AlertDialogFooter>

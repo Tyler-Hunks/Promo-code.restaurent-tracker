@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type PromoCode, type InsertPromoCode, type ApiToken, type ApiTokenGenerate, type EmailCampaign, type InsertEmailCampaign, type UpdateEmailCampaign, type EmailCampaignTemplate, type InsertEmailCampaignTemplate, type EmailCampaignLaunch, type InsertEmailCampaignLaunch } from "@shared/schema";
+import { type User, type InsertUser, type PromoCode, type InsertPromoCode, type ApiToken, type ApiTokenGenerate, type EmailCampaign, type InsertEmailCampaign, type UpdateEmailCampaign, type EmailCampaignTemplate, type InsertEmailCampaignTemplate, type EmailCampaignLaunch, type InsertEmailCampaignLaunch, type GoogleOauthTokens, type SaveGoogleTokens } from "@shared/schema";
 import { createClient } from '@supabase/supabase-js';
 import type { IStorage, PaginationOptions, PaginatedResult } from "./storage";
 
@@ -768,6 +768,74 @@ export class CloudflareStorage implements IStorage {
       throw new Error(`Failed to update run status: ${error.message}`);
     }
     return updated ? this.mapEmailCampaignLaunchFromDb(updated) : undefined;
+  }
+
+  private mapGoogleTokensFromDb(r: any): GoogleOauthTokens {
+    return {
+      id: r.id,
+      refreshToken: r.refresh_token,
+      accessToken: r.access_token ?? null,
+      accessTokenExpiresAt: r.access_token_expires_at ? new Date(r.access_token_expires_at) : null,
+      connectedEmail: r.connected_email ?? null,
+      updatedAt: new Date(r.updated_at),
+    };
+  }
+
+  async getGoogleTokens(): Promise<GoogleOauthTokens | undefined> {
+    const { data, error } = await this.supabase
+      .from('google_oauth_tokens')
+      .select('*')
+      .eq('id', 'default')
+      .maybeSingle();
+    if (error) {
+      console.error('getGoogleTokens failed:', error);
+      throw new Error(`Failed to read Google connection: ${error.message}`);
+    }
+    return data ? this.mapGoogleTokensFromDb(data) : undefined;
+  }
+
+  async saveGoogleTokens(data: SaveGoogleTokens): Promise<GoogleOauthTokens> {
+    const { data: row, error } = await this.supabase
+      .from('google_oauth_tokens')
+      .upsert({
+        id: 'default',
+        refresh_token: data.refreshToken,
+        access_token: data.accessToken ?? null,
+        access_token_expires_at: data.accessTokenExpiresAt ? data.accessTokenExpiresAt.toISOString() : null,
+        connected_email: data.connectedEmail ?? null,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'id' })
+      .select()
+      .single();
+    if (error) {
+      console.error('saveGoogleTokens failed:', error);
+      throw new Error(`Failed to save Google connection: ${error.message}`);
+    }
+    return this.mapGoogleTokensFromDb(row);
+  }
+
+  async updateGoogleAccessToken(accessToken: string, expiresAt: Date): Promise<void> {
+    const { error } = await this.supabase
+      .from('google_oauth_tokens')
+      .update({
+        access_token: accessToken,
+        access_token_expires_at: expiresAt.toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', 'default');
+    if (error) {
+      console.error('updateGoogleAccessToken failed:', error);
+    }
+  }
+
+  async deleteGoogleTokens(): Promise<void> {
+    const { error } = await this.supabase
+      .from('google_oauth_tokens')
+      .delete()
+      .eq('id', 'default');
+    if (error) {
+      console.error('deleteGoogleTokens failed:', error);
+    }
   }
 }
 

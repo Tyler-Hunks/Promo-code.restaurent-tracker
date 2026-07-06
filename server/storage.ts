@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type PromoCode, type InsertPromoCode, type ApiToken, type InsertApiToken, type EmailCampaign, type InsertEmailCampaign, type UpdateEmailCampaign, type EmailCampaignTemplate, type InsertEmailCampaignTemplate, type EmailCampaignLaunch, type InsertEmailCampaignLaunch, users, promoCodes, apiTokens, emailCampaigns, emailCampaignTemplates, emailCampaignLaunches } from "@shared/schema";
+import { type User, type InsertUser, type PromoCode, type InsertPromoCode, type ApiToken, type InsertApiToken, type EmailCampaign, type InsertEmailCampaign, type UpdateEmailCampaign, type EmailCampaignTemplate, type InsertEmailCampaignTemplate, type EmailCampaignLaunch, type InsertEmailCampaignLaunch, type GoogleOauthTokens, type SaveGoogleTokens, users, promoCodes, apiTokens, emailCampaigns, emailCampaignTemplates, emailCampaignLaunches, googleOauthTokens } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { db } from "./db";
 import { eq, sql, and, inArray } from "drizzle-orm";
@@ -69,6 +69,12 @@ export interface IStorage {
     status: "finished" | "failed",
     detail?: string | null,
   ): Promise<EmailCampaignLaunch | undefined>;
+
+  // Google OAuth connection (raw-sheet row check). Single row, id='default'.
+  getGoogleTokens(): Promise<GoogleOauthTokens | undefined>;
+  saveGoogleTokens(data: SaveGoogleTokens): Promise<GoogleOauthTokens>;
+  updateGoogleAccessToken(accessToken: string, expiresAt: Date): Promise<void>;
+  deleteGoogleTokens(): Promise<void>;
 }
 
 export class MemStorage implements IStorage {
@@ -541,6 +547,33 @@ export class MemStorage implements IStorage {
     this.emailCampaignLaunches.set(id, updated);
     return updated;
   }
+
+  private googleTokens: GoogleOauthTokens | undefined;
+
+  async getGoogleTokens(): Promise<GoogleOauthTokens | undefined> {
+    return this.googleTokens;
+  }
+
+  async saveGoogleTokens(data: SaveGoogleTokens): Promise<GoogleOauthTokens> {
+    this.googleTokens = {
+      id: "default",
+      refreshToken: data.refreshToken,
+      accessToken: data.accessToken ?? null,
+      accessTokenExpiresAt: data.accessTokenExpiresAt ?? null,
+      connectedEmail: data.connectedEmail ?? null,
+      updatedAt: new Date(),
+    };
+    return this.googleTokens;
+  }
+
+  async updateGoogleAccessToken(accessToken: string, expiresAt: Date): Promise<void> {
+    if (!this.googleTokens) return;
+    this.googleTokens = { ...this.googleTokens, accessToken, accessTokenExpiresAt: expiresAt, updatedAt: new Date() };
+  }
+
+  async deleteGoogleTokens(): Promise<void> {
+    this.googleTokens = undefined;
+  }
 }
 
 // DatabaseStorage implementation
@@ -943,6 +976,39 @@ export class DatabaseStorage implements IStorage {
       .where(eq(emailCampaignLaunches.id, id))
       .returning();
     return updated || undefined;
+  }
+
+  async getGoogleTokens(): Promise<GoogleOauthTokens | undefined> {
+    const [row] = await db.select().from(googleOauthTokens).where(eq(googleOauthTokens.id, "default"));
+    return row || undefined;
+  }
+
+  async saveGoogleTokens(data: SaveGoogleTokens): Promise<GoogleOauthTokens> {
+    const values = {
+      id: "default" as const,
+      refreshToken: data.refreshToken,
+      accessToken: data.accessToken ?? null,
+      accessTokenExpiresAt: data.accessTokenExpiresAt ?? null,
+      connectedEmail: data.connectedEmail ?? null,
+      updatedAt: new Date(),
+    };
+    const [row] = await db
+      .insert(googleOauthTokens)
+      .values(values)
+      .onConflictDoUpdate({ target: googleOauthTokens.id, set: values })
+      .returning();
+    return row;
+  }
+
+  async updateGoogleAccessToken(accessToken: string, expiresAt: Date): Promise<void> {
+    await db
+      .update(googleOauthTokens)
+      .set({ accessToken, accessTokenExpiresAt: expiresAt, updatedAt: new Date() })
+      .where(eq(googleOauthTokens.id, "default"));
+  }
+
+  async deleteGoogleTokens(): Promise<void> {
+    await db.delete(googleOauthTokens).where(eq(googleOauthTokens.id, "default"));
   }
 }
 

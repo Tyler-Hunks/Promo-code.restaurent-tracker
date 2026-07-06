@@ -1,2 +1,3 @@
 - [Deploy & database operational model](deploy-and-db.md) — prod = Cloudflare Worker + Supabase; wrangler secrets can drift from Replit secrets; migrations manual via SQL Editor; agent shell never sees updated secrets.
 - [Cloudflare Worker deploy method](cloudflare-deploy-method.md) — deploy via temp workflow + tee log (bash tool times out); dev DB unreachable, verify via tsc + prod.
+- [Google Sheets OAuth connect flow](google-sheets-oauth.md) — OAuth client JSON lives under legacy GOOGLE_SERVICE_ACCOUNT_JSON name; redirect-URI/consent-screen gotchas that break Connect Google.

@@ -3,6 +3,14 @@ import { storage } from "./storage-cloudflare";
 import { insertPromoCodeSchema, bulkGenerateSchema, apiTokenGenerateSchema, deleteBulkByFiltersSchema, insertEmailCampaignSchema, updateEmailCampaignSchema, insertEmailCampaignTemplateSchema, runCallbackSchema, parseExpiresAt, LIST_LABELS } from "../shared/schema";
 import { z } from "zod";
 import { buildLaunchRequestBody, triggerN8nWebhook } from "./n8n";
+import {
+  parseOAuthClientJson,
+  createOAuthState,
+  verifyOAuthState,
+  buildGoogleAuthUrl,
+  exchangeCodeForTokens,
+  performRawSheetCheck,
+} from "./google";
 
 // Types for Cloudflare Worker environment
 interface Env {
@@ -17,6 +25,14 @@ interface Env {
   // processing and re-sends to existing leads. Same X-Trigger-Secret header.
   N8N_RELAUNCH_WEBHOOK_URL?: string;
   N8N_RELAUNCH_WEBHOOK_SECRET?: string;
+  // Google OAuth client file (raw-sheet row check). The legacy name is a
+  // fallback — the same file was first saved under it by mistake.
+  GOOGLE_OAUTH_CLIENT_JSON?: string;
+  GOOGLE_SERVICE_ACCOUNT_JSON?: string;
+}
+
+function getGoogleClient(env: Env) {
+  return parseOAuthClientJson(env.GOOGLE_OAUTH_CLIENT_JSON || env.GOOGLE_SERVICE_ACCOUNT_JSON);
 }
 
 // Serve static files (built React app).
@@ -312,6 +328,45 @@ async function handleAPI(request: Request, env: Env): Promise<Response> {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
+    }
+  }
+
+  // Google redirects the browser here after the consent screen — no Bearer
+  // token possible, so it must be handled before requireAuth. Protected by
+  // the HMAC-signed state parameter instead.
+  if (path === '/api/google/callback' && method === 'GET') {
+    const redirectTo = (suffix: string) =>
+      Response.redirect(new URL(`/campaigns?google=${suffix}`, request.url).toString(), 302);
+    try {
+      const client = getGoogleClient(env);
+      if (!client) return redirectTo('error');
+      const code = url.searchParams.get('code');
+      // User clicked "Cancel" on the consent screen, or Google errored.
+      if (url.searchParams.get('error') || !code) return redirectTo('error');
+      const stateOk = await verifyOAuthState(url.searchParams.get('state'), client.clientSecret);
+      if (!stateOk) return redirectTo('error');
+
+      const redirectUri = `${url.origin}/api/google/callback`;
+      const result = await exchangeCodeForTokens(client, code, redirectUri);
+      if (!result.ok) return redirectTo('error');
+
+      // Google only returns a refresh_token on the first consent (we force it
+      // with prompt=consent, but keep the old one as a fallback anyway).
+      const store = storage(env);
+      const existing = await store.getGoogleTokens();
+      const refreshToken = result.refreshToken ?? existing?.refreshToken;
+      if (!refreshToken) return redirectTo('error');
+
+      await store.saveGoogleTokens({
+        refreshToken,
+        accessToken: result.accessToken,
+        accessTokenExpiresAt: result.expiresAt,
+        connectedEmail: result.email ?? existing?.connectedEmail ?? null,
+      });
+      return redirectTo('connected');
+    } catch (error) {
+      console.error('Google OAuth callback failed:', error);
+      return redirectTo('error');
     }
   }
 
@@ -638,6 +693,65 @@ async function handleAPI(request: Request, env: Env): Promise<Response> {
       }
 
       return new Response(JSON.stringify({ message: 'Token deleted successfully' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    // ========================================================================
+    // Google Sheets connection (raw-sheet row check) — mirrors Express routes.
+    // ========================================================================
+    if (path === '/api/google/status' && method === 'GET') {
+      const tokens = await storageInstance.getGoogleTokens();
+      return new Response(JSON.stringify({ connected: !!tokens, email: tokens?.connectedEmail ?? null }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    if (path === '/api/google/auth-url' && method === 'GET') {
+      const client = getGoogleClient(env);
+      if (!client) {
+        return new Response(JSON.stringify({
+          message: "Google connection isn't configured yet. Add the OAuth client file (GOOGLE_OAUTH_CLIENT_JSON).",
+        }), {
+          status: 503,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+      const redirectUri = `${url.origin}/api/google/callback`;
+      const state = await createOAuthState(client.clientSecret);
+      return new Response(JSON.stringify({ url: buildGoogleAuthUrl(client.clientId, redirectUri, state) }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    // Counts data rows in the campaign's raw-leads tab. Purely informational —
+    // the launch dialog shows the result but never blocks the launch.
+    if (path.startsWith('/api/email-campaigns/') && path.endsWith('/raw-sheet-count') && method === 'GET') {
+      const id = path.split('/')[3];
+      const campaign = await storageInstance.getEmailCampaign(id);
+      if (!campaign) {
+        return new Response(JSON.stringify({ message: 'Campaign not found' }), {
+          status: 404,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+      if (!campaign.documentId || !campaign.rawSheetId?.trim()) {
+        return new Response(JSON.stringify({ message: 'This campaign has no Document ID or Raw leads Sheet ID.' }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+      const client = getGoogleClient(env);
+      if (!client) {
+        return new Response(JSON.stringify({
+          message: "Google connection isn't configured yet. Add the OAuth client file (GOOGLE_OAUTH_CLIENT_JSON).",
+        }), {
+          status: 503,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+      const result = await performRawSheetCheck(storageInstance, client, campaign.documentId, campaign.rawSheetId.trim());
+      return new Response(JSON.stringify(result), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
