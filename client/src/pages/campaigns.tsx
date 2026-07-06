@@ -1048,6 +1048,7 @@ export default function Campaigns() {
   const [launchResult, setLaunchResult] = useState<LaunchResult | null>(null);
   const [selectedLaunch, setSelectedLaunch] = useState<EmailCampaignLaunch | null>(null);
   const [deleteTemplateTarget, setDeleteTemplateTarget] = useState<EmailCampaignTemplate | null>(null);
+  const [deleteCampaignTarget, setDeleteCampaignTarget] = useState<EmailCampaign | null>(null);
 
   const [campaignSearch, setCampaignSearch] = useState("");
   const [templateSearch, setTemplateSearch] = useState("");
@@ -1192,6 +1193,27 @@ export default function Campaigns() {
     onError: (error) => {
       toast({
         title: "Could not delete template",
+        description: getErrorMessage(error, "Please try again."),
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteCampaignMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await apiRequest("DELETE", `/api/email-campaigns/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/email-campaigns"] });
+      setDeleteCampaignTarget(null);
+      toast({
+        title: "Campaign deleted",
+        description: "Its past launches are still in the History tab.",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Could not delete campaign",
         description: getErrorMessage(error, "Please try again."),
         variant: "destructive",
       });
@@ -1513,6 +1535,16 @@ export default function Campaigns() {
                             title="Open the RAW leads tab in Google Sheets"
                           >
                             <ExternalLink className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-destructive hover:text-destructive"
+                            onClick={() => setDeleteCampaignTarget(c)}
+                            data-testid={`button-delete-campaign-${c.id}`}
+                            title="Delete campaign"
+                          >
+                            <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
                       </CardContent>
@@ -1913,6 +1945,44 @@ export default function Campaigns() {
               data-testid="button-confirm-delete-template"
             >
               {deleteTemplateMutation.isPending ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Trash2 className="h-4 w-4 mr-2" />
+              )}
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete campaign confirmation */}
+      <AlertDialog
+        open={!!deleteCampaignTarget}
+        onOpenChange={(open) => {
+          if (!open) setDeleteCampaignTarget(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this campaign?</AlertDialogTitle>
+            <AlertDialogDescription>
+              <strong>{deleteCampaignTarget?.campaignName}</strong> will be permanently
+              removed from the Campaigns tab. Its past launches stay in the History
+              tab, and your Google Sheet is not touched.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-delete-campaign">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={deleteCampaignMutation.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={(e) => {
+                e.preventDefault();
+                if (deleteCampaignTarget) deleteCampaignMutation.mutate(deleteCampaignTarget.id);
+              }}
+              data-testid="button-confirm-delete-campaign"
+            >
+              {deleteCampaignMutation.isPending ? (
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
               ) : (
                 <Trash2 className="h-4 w-4 mr-2" />

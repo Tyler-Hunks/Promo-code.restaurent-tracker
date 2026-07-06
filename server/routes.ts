@@ -638,6 +638,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Delete a campaign. Launch history is intentionally untouched — each launch
+  // row snapshots the campaign name, so the History tab keeps showing it.
+  app.delete("/api/email-campaigns/:id", async (req, res) => {
+    try {
+      const deleted = await storage.deleteEmailCampaign(req.params.id);
+      if (!deleted) {
+        return res.status(404).json({ message: "Campaign not found" });
+      }
+      res.json({ message: "Campaign deleted" });
+    } catch (error) {
+      res.status(500).json({ message: error instanceof Error ? error.message : "Failed to delete campaign" });
+    }
+  });
+
   // Launch: fire the n8n webhook server-side (secret stays hidden), then mark launched.
   app.post("/api/email-campaigns/:id/launch", async (req, res) => {
     try {

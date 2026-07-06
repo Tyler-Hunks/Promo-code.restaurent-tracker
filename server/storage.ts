@@ -54,6 +54,9 @@ export interface IStorage {
   getEmailCampaign(id: string): Promise<EmailCampaign | undefined>;
   createEmailCampaign(data: InsertEmailCampaign): Promise<EmailCampaign>;
   updateEmailCampaign(id: string, data: UpdateEmailCampaign): Promise<EmailCampaign | undefined>;
+  // Removes only the campaign row. Launch history rows are intentionally kept —
+  // they snapshot campaign_name at launch time, so History still shows them.
+  deleteEmailCampaign(id: string): Promise<boolean>;
   markEmailCampaignLaunched(id: string): Promise<EmailCampaign | undefined>;
   getEmailCampaignTemplates(): Promise<EmailCampaignTemplate[]>;
   createEmailCampaignTemplate(data: InsertEmailCampaignTemplate): Promise<EmailCampaignTemplate>;
@@ -451,6 +454,11 @@ export class MemStorage implements IStorage {
     };
     this.emailCampaigns.set(id, updated);
     return updated;
+  }
+
+  async deleteEmailCampaign(id: string): Promise<boolean> {
+    // Launch history rows are kept on purpose (they carry a name snapshot).
+    return this.emailCampaigns.delete(id);
   }
 
   async markEmailCampaignLaunched(id: string): Promise<EmailCampaign | undefined> {
@@ -865,6 +873,12 @@ export class DatabaseStorage implements IStorage {
 
     const [updated] = await db.update(emailCampaigns).set(patch).where(eq(emailCampaigns.id, id)).returning();
     return updated || undefined;
+  }
+
+  async deleteEmailCampaign(id: string): Promise<boolean> {
+    // Launch history rows are kept on purpose (they carry a name snapshot).
+    const deleted = await db.delete(emailCampaigns).where(eq(emailCampaigns.id, id)).returning();
+    return deleted.length > 0;
   }
 
   async markEmailCampaignLaunched(id: string): Promise<EmailCampaign | undefined> {

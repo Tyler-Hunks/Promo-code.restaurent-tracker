@@ -698,6 +698,21 @@ export class CloudflareStorage implements IStorage {
     return (data?.length ?? 0) > 0;
   }
 
+  async deleteEmailCampaign(id: string): Promise<boolean> {
+    // Launch history rows in email_campaign_launches are kept on purpose —
+    // they snapshot campaign_name, so History keeps showing past launches.
+    const { data, error } = await this.supabase
+      .from('email_campaigns')
+      .delete()
+      .eq('id', id)
+      .select('id');
+    if (error) {
+      console.error('deleteEmailCampaign failed:', error);
+      throw new Error(`Failed to delete campaign: ${error.message}`);
+    }
+    return (data?.length ?? 0) > 0;
+  }
+
   async getEmailCampaignLaunches(): Promise<EmailCampaignLaunch[]> {
     const { data, error } = await this.supabase
       .from('email_campaign_launches')

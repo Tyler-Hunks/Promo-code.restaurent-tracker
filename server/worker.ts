@@ -779,6 +779,23 @@ async function handleAPI(request: Request, env: Env): Promise<Response> {
       });
     }
 
+    // Delete a campaign. Launch history is intentionally untouched — each
+    // launch row snapshots the campaign name, so History keeps showing it.
+    // Exact 4-segment match so subpaths like /:id/launch can never hit this.
+    if (path.startsWith('/api/email-campaigns/') && path.split('/').length === 4 && method === 'DELETE') {
+      const id = path.split('/')[3];
+      const deleted = await storageInstance.deleteEmailCampaign(id);
+      if (!deleted) {
+        return new Response(JSON.stringify({ message: 'Campaign not found' }), {
+          status: 404,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+      return new Response(JSON.stringify({ message: 'Campaign deleted' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
     if (path === '/api/email-campaign-templates' && method === 'GET') {
       const templates = await storageInstance.getEmailCampaignTemplates();
       return new Response(JSON.stringify(templates), {
