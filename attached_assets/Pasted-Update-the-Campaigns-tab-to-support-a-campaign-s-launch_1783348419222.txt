@@ -1,0 +1,42 @@
+Update the Campaigns tab to support a campaign's launch state and two launch modes.
+
+BUTTON STATES (per campaign row)
+- A campaign that has never been fired: show a single "Launch" button.
+- A campaign that has been fired before (we already log this): replace it with
+  two buttons — "New Launch" and "Relaunch".
+
+You already store fired campaigns, so use that record to decide which state to show.
+
+RAW-SHEET CHECK (before a process launch)
+- When the user opens the launch confirmation for "Launch" or "New Launch",
+  call the Google Sheet raw tab (documentId + rawSheetId) and count its data rows.
+- Show the result inline:
+    - rows found  -> "✓ 240 new leads found in the raw sheet"
+    - empty       -> "⚠ Raw sheet is empty — did you upload leads?"
+- This is a confirmation aid; still let the user proceed. It doubles as the
+  "did you forget to upload leads?" guard.
+
+TWO ENDPOINTS
+- "Launch" and "New Launch" POST to the existing Campaign Setup webhook
+  (processes leads, then hands off).
+- "Relaunch" POSTs to a NEW webhook: the Campaign Relaunch workflow
+  (skips lead processing, re-sends existing leads with the new script).
+- These are two different webhook URLs with two different secrets. Store both
+  as separate env vars / Replit Secrets:
+    N8N_SETUP_WEBHOOK_URL   + N8N_SETUP_SECRET
+    N8N_RELAUNCH_WEBHOOK_URL + N8N_RELAUNCH_SECRET
+  Send the matching secret in the X-Trigger-Secret header for each.
+
+PAYLOAD
+- Keep the existing payload shape for all launches (documentId, sheetIds,
+  rawSheetId, lists[], followUps, placeholders, expiryDate, campaignName,
+  runId, callbackUrl, triggeredAt).
+- Relaunch sends the same payload to its own webhook; it does not need a raw
+  sheet, but sending the full payload is fine — the workflow ignores what it
+  doesn't use.
+
+KEEP
+- Confirmation step before any launch ("Launch <name>?").
+- Disable-on-submit to prevent double-fires.
+- Update the campaign's status + last_launched_at after a successful response.
+- Don't break existing promo-code functionality.
