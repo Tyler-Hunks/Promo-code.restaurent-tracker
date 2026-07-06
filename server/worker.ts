@@ -15,47 +15,32 @@ interface Env {
   N8N_WEBHOOK_SECRET?: string;
 }
 
-// Serve static files (built React app)
+// Serve static files (built React app).
+// wrangler.toml sets not_found_handling = "single-page-application", so ASSETS
+// itself serves index.html (200) for app routes like /campaigns — deep links
+// and refreshes just work. The extra branch below is a belt-and-braces
+// fallback that reroutes any stray 404 for a page-like path to the SPA shell.
 async function handleStatic(request: Request, env: any): Promise<Response> {
-  const url = new URL(request.url);
-  
-  // Try to serve the asset first
+  // If the assets binding is missing (misconfigured wrangler.toml), redirect
+  // to the root — Cloudflare serves matching assets before the worker runs,
+  // so "/" always works. Never crash with a 1101.
+  if (!env.ASSETS?.fetch) {
+    return Response.redirect(new URL('/', request.url).toString(), 302);
+  }
   try {
     const asset = await env.ASSETS.fetch(request);
     if (asset.status !== 404) {
       return asset;
     }
-  } catch (error) {
-    console.log('Asset fetch error:', error);
-  }
-  
-  // For SPA routing - serve index.html for non-asset routes
-  if (!url.pathname.includes('.') || url.pathname === '/') {
-    try {
-      const indexRequest = new Request(new URL('/index.html', request.url), request);
-      return await env.ASSETS.fetch(indexRequest);
-    } catch (error) {
-      console.log('Index.html fetch error:', error);
-      // Fallback HTML if assets don't work
-      return new Response(
-        `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Promo Code Manager</title>
-</head>
-<body>
-  <div id="root"></div>
-  <p>Loading application...</p>
-</body>
-</html>`,
-        { headers: { 'Content-Type': 'text/html' } }
-      );
+    const url = new URL(request.url);
+    if (request.method === 'GET' && !url.pathname.includes('.')) {
+      return env.ASSETS.fetch(new Request(new URL('/', request.url).toString(), { headers: request.headers }));
     }
+    return asset;
+  } catch (error) {
+    console.error('Static asset error:', error);
+    return Response.redirect(new URL('/', request.url).toString(), 302);
   }
-  
-  return new Response('Not found', { status: 404 });
 }
 
 // Generate secure token

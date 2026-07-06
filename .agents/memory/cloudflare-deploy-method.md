@@ -13,3 +13,5 @@ Deploying the production Cloudflare Worker (`npm run deploy`) exceeds the 120s b
 3. `removeWorkflow({name: "Deploy to Cloudflare"})` to clean up.
 
 Also: dev database (Neon/`api.pooler.supabase.com`) is unreachable from the dev environment (ENOTFOUND), so dev API calls 500 — verify changes with `tsc --noEmit` and against the deployed worker (blueempiregroup.co.uk) instead.
+
+**wrangler.toml assets gotcha:** `[assets]` must declare `binding = "ASSETS"` or `env.ASSETS` is undefined inside the worker — the root URL still works (Cloudflare serves matching assets before invoking the worker) but every SPA deep link (e.g. `/campaigns`) crashes with error 1101. Pair it with `not_found_handling = "single-page-application"` so deep links/refreshes serve index.html. After deploying, verify with `curl -w "%{http_code}" https://blueempiregroup.co.uk/campaigns` (expect 200 with script tags).

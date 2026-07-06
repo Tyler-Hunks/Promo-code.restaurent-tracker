@@ -61,7 +61,18 @@ import {
   XCircle,
   History,
   Eye,
+  ExternalLink,
 } from "lucide-react";
+
+// Direct link to a specific tab of a Google Sheet, built from the campaign's
+// Document ID + RAW leads tab gid.
+function openRawSheet(documentId?: string | null, rawSheetId?: string | null) {
+  if (!documentId || !rawSheetId) return;
+  const url = `https://docs.google.com/spreadsheets/d/${encodeURIComponent(
+    documentId.trim(),
+  )}/edit#gid=${encodeURIComponent(rawSheetId.trim())}`;
+  window.open(url, "_blank", "noopener,noreferrer");
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -731,13 +742,27 @@ function CampaignForm({
           The tab holding your raw, unprocessed leads — n8n pulls new leads from
           here. Required, just like the two list scripts.
         </p>
-        <Input
-          id="rawSheetId"
-          value={state.rawSheetId}
-          onChange={(e) => update({ rawSheetId: e.target.value })}
-          placeholder="e.g. 0 or 123456789"
-          data-testid="input-raw-sheet-id"
-        />
+        <div className="flex gap-2">
+          <Input
+            id="rawSheetId"
+            value={state.rawSheetId}
+            onChange={(e) => update({ rawSheetId: e.target.value })}
+            placeholder="e.g. 0 or 123456789"
+            data-testid="input-raw-sheet-id"
+            className="flex-1"
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            title="Open the RAW leads tab in Google Sheets"
+            disabled={!state.documentId.trim() || !state.rawSheetId.trim()}
+            onClick={() => openRawSheet(state.documentId, state.rawSheetId)}
+            data-testid="button-open-raw-sheet-form"
+          >
+            <ExternalLink className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
 
       <div className="space-y-1.5">
@@ -1478,6 +1503,16 @@ export default function Campaigns() {
                             title="Duplicate"
                           >
                             <Copy className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => openRawSheet(c.documentId, c.rawSheetId)}
+                            disabled={!c.documentId || !c.rawSheetId}
+                            data-testid={`button-open-raw-${c.id}`}
+                            title="Open the RAW leads tab in Google Sheets"
+                          >
+                            <ExternalLink className="h-4 w-4" />
                           </Button>
                         </div>
                       </CardContent>

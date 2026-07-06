@@ -13,9 +13,15 @@ routes = [
 workers_dev = true
 preview_urls = true
 
-# Static assets (React build files)
+# Static assets (React build files). single-page-application makes Cloudflare
+# serve index.html (200) for app routes like /campaigns, so refreshing or
+# opening a deep link never breaks.
 [assets]
 directory = "./dist/public"
+# binding is REQUIRED for the worker code to call env.ASSETS.fetch() — without
+# it env.ASSETS is undefined and every deep link (e.g. /campaigns) crashes.
+binding = "ASSETS"
+not_found_handling = "single-page-application"
 
 # Note: Secrets should be set using: wrangler secret put <KEY_NAME>
 # Run these commands after first deployment:
