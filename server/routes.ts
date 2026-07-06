@@ -652,19 +652,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Launch: fire the n8n webhook server-side (secret stays hidden), then mark launched.
-  app.post("/api/email-campaigns/:id/launch", async (req, res) => {
+  // Launch / Relaunch: fire the right n8n webhook server-side (secrets stay
+  // hidden), then mark launched. "launch" runs the normal workflow (processes
+  // new leads first); "relaunch" hits the separate Campaign Relaunch workflow
+  // (skips lead processing, re-sends to existing leads with the current
+  // scripts). Same payload shape and same X-Trigger-Secret header for both —
+  // only the URL and secret value differ.
+  const fireCampaignWebhook = async (req: any, res: any, mode: "launch" | "relaunch") => {
     try {
       const campaign = await storage.getEmailCampaign(req.params.id);
       if (!campaign) {
         return res.status(404).json({ message: "Campaign not found" });
       }
 
-      const webhookUrl = process.env.N8N_WEBHOOK_URL;
-      const secret = process.env.N8N_WEBHOOK_SECRET; // optional — only used if your n8n webhook has Header Auth
+      const webhookUrl =
+        mode === "relaunch" ? process.env.N8N_RELAUNCH_WEBHOOK_URL : process.env.N8N_WEBHOOK_URL;
+      const secret =
+        mode === "relaunch" ? process.env.N8N_RELAUNCH_WEBHOOK_SECRET : process.env.N8N_WEBHOOK_SECRET; // optional — only used if your n8n webhook has Header Auth
       if (!webhookUrl) {
         return res.status(503).json({
-          message: "Campaign launching isn't configured yet. Add your n8n webhook URL (N8N_WEBHOOK_URL).",
+          message:
+            mode === "relaunch"
+              ? "Relaunching isn't configured yet. Add your n8n relaunch webhook URL (N8N_RELAUNCH_WEBHOOK_URL)."
+              : "Campaign launching isn't configured yet. Add your n8n webhook URL (N8N_WEBHOOK_URL).",
         });
       }
 
@@ -715,6 +725,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         campaignName: campaign.campaignName,
         status: result.ok ? "success" : "failed",
         detail: result.detail ?? result.message ?? null,
+        launchType: mode,
         runStatus: result.ok ? "in_progress" : null,
       });
 
@@ -727,22 +738,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const updated = await storage.markEmailCampaignLaunched(campaign.id);
-      res.json({ message: result.message || "Campaign launched", detail: result.detail, campaign: updated });
+      res.json({
+        message: result.message || (mode === "relaunch" ? "Campaign relaunched" : "Campaign launched"),
+        detail: result.detail,
+        campaign: updated,
+      });
     } catch (error) {
       res.status(500).json({ message: error instanceof Error ? error.message : "Failed to launch campaign" });
     }
-  });
+  };
+
+  app.post("/api/email-campaigns/:id/launch", (req, res) => fireCampaignWebhook(req, res, "launch"));
+  app.post("/api/email-campaigns/:id/relaunch", (req, res) => fireCampaignWebhook(req, res, "relaunch"));
 
   // Called BY n8n when a workflow run ends (last node or Error Trigger).
   // Authenticated with the shared secret header, not a Bearer token.
   app.post("/api/campaign-runs/callback", async (req, res) => {
     try {
-      const secret = process.env.N8N_WEBHOOK_SECRET;
-      if (!secret) {
+      // Either workflow may call back — the launch one authenticates with
+      // N8N_WEBHOOK_SECRET, the relaunch one with N8N_RELAUNCH_WEBHOOK_SECRET.
+      const validSecrets = [process.env.N8N_WEBHOOK_SECRET, process.env.N8N_RELAUNCH_WEBHOOK_SECRET].filter(
+        (s): s is string => !!s,
+      );
+      if (validSecrets.length === 0) {
         return res.status(503).json({ message: "Run callbacks are not configured (missing N8N_WEBHOOK_SECRET)." });
       }
       const provided = req.get("X-Callback-Secret");
-      if (provided !== secret) {
+      if (!provided || !validSecrets.includes(provided)) {
         return res.status(401).json({ message: "Invalid callback secret" });
       }
 

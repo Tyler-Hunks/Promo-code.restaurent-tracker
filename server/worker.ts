@@ -13,6 +13,10 @@ interface Env {
   // n8n webhook for the Campaigns tab (set via `wrangler secret put`).
   N8N_WEBHOOK_URL?: string;
   N8N_WEBHOOK_SECRET?: string;
+  // Campaign Relaunch workflow — separate webhook URL + secret. Skips lead
+  // processing and re-sends to existing leads. Same X-Trigger-Secret header.
+  N8N_RELAUNCH_WEBHOOK_URL?: string;
+  N8N_RELAUNCH_WEBHOOK_SECRET?: string;
 }
 
 // Serve static files (built React app).
@@ -265,15 +269,17 @@ async function handleAPI(request: Request, env: Env): Promise<Response> {
   // header instead, so it must be handled before requireAuth.
   if (path === '/api/campaign-runs/callback' && method === 'POST') {
     try {
-      const callbackSecret = env.N8N_WEBHOOK_SECRET;
-      if (!callbackSecret) {
+      // Either workflow may call back — the launch one authenticates with
+      // N8N_WEBHOOK_SECRET, the relaunch one with N8N_RELAUNCH_WEBHOOK_SECRET.
+      const validSecrets = [env.N8N_WEBHOOK_SECRET, env.N8N_RELAUNCH_WEBHOOK_SECRET].filter((s): s is string => !!s);
+      if (validSecrets.length === 0) {
         return new Response(JSON.stringify({ message: 'Run callbacks are not configured (missing N8N_WEBHOOK_SECRET).' }), {
           status: 503,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         });
       }
       const provided = request.headers.get('X-Callback-Secret');
-      if (provided !== callbackSecret) {
+      if (!provided || !validSecrets.includes(provided)) {
         return new Response(JSON.stringify({ message: 'Invalid callback secret' }), {
           status: 401,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -663,7 +669,10 @@ async function handleAPI(request: Request, env: Env): Promise<Response> {
       });
     }
 
-    if (path.startsWith('/api/email-campaigns/') && path.endsWith('/launch') && method === 'POST') {
+    // Launch ("/launch") and Relaunch ("/relaunch") share this handler — same
+    // payload shape, but each mode fires its own webhook URL + secret.
+    if (path.startsWith('/api/email-campaigns/') && (path.endsWith('/launch') || path.endsWith('/relaunch')) && method === 'POST') {
+      const isRelaunch = path.endsWith('/relaunch');
       const id = path.split('/')[3];
       const campaign = await storageInstance.getEmailCampaign(id);
       if (!campaign) {
@@ -673,8 +682,14 @@ async function handleAPI(request: Request, env: Env): Promise<Response> {
         });
       }
 
-      if (!env.N8N_WEBHOOK_URL) {
-        return new Response(JSON.stringify({ message: "Campaign launching isn't configured yet. Add your n8n webhook URL (N8N_WEBHOOK_URL)." }), {
+      const webhookUrl = isRelaunch ? env.N8N_RELAUNCH_WEBHOOK_URL : env.N8N_WEBHOOK_URL;
+      const webhookSecret = isRelaunch ? env.N8N_RELAUNCH_WEBHOOK_SECRET : env.N8N_WEBHOOK_SECRET;
+      if (!webhookUrl) {
+        return new Response(JSON.stringify({
+          message: isRelaunch
+            ? "Relaunching isn't configured yet. Add your n8n relaunch webhook URL (N8N_RELAUNCH_WEBHOOK_URL)."
+            : "Campaign launching isn't configured yet. Add your n8n webhook URL (N8N_WEBHOOK_URL).",
+        }), {
           status: 503,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         });
@@ -723,7 +738,7 @@ async function handleAPI(request: Request, env: Env): Promise<Response> {
         runId,
         callbackUrl,
       };
-      const result = await triggerN8nWebhook(env.N8N_WEBHOOK_URL, env.N8N_WEBHOOK_SECRET, payload);
+      const result = await triggerN8nWebhook(webhookUrl, webhookSecret, payload);
 
       // Record every launch attempt (success OR failure) in the history. When
       // the webhook was accepted, the workflow is now running — mark the run
@@ -734,6 +749,7 @@ async function handleAPI(request: Request, env: Env): Promise<Response> {
         campaignName: campaign.campaignName,
         status: result.ok ? 'success' : 'failed',
         detail: result.detail ?? result.message ?? null,
+        launchType: isRelaunch ? 'relaunch' : 'launch',
         runStatus: result.ok ? 'in_progress' : null,
       });
 
@@ -745,7 +761,7 @@ async function handleAPI(request: Request, env: Env): Promise<Response> {
       }
 
       const updated = await storageInstance.markEmailCampaignLaunched(id);
-      return new Response(JSON.stringify({ message: result.message || 'Campaign launched', detail: result.detail, campaign: updated }), {
+      return new Response(JSON.stringify({ message: result.message || (isRelaunch ? 'Campaign relaunched' : 'Campaign launched'), detail: result.detail, campaign: updated }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }

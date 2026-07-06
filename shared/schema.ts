@@ -178,6 +178,10 @@ export const emailCampaignLaunches = pgTable("email_campaign_launches", {
   // Whether the webhook CALL was accepted by n8n ("did the request arrive?").
   status: text("status", { enum: ["success", "failed"] }).notNull(),
   detail: text("detail"), // truncated n8n response body or error message
+  // "launch" = the normal workflow (processes new leads first); "relaunch" =
+  // the Campaign Relaunch workflow (skips lead processing and re-sends to the
+  // existing leads). NULL on legacy rows from before the split = "launch".
+  launchType: text("launch_type", { enum: ["launch", "relaunch"] }),
   // Live status of the n8n WORKFLOW itself ("did the run finish?"). Set to
   // "in_progress" when the webhook is accepted, then updated by n8n calling
   // back POST /api/campaign-runs/callback with the launch id (runId). Null for

@@ -52,6 +52,7 @@ import {
   Loader2,
   FileText,
   Rocket,
+  RefreshCw,
   CalendarClock,
   Copy,
   Search,
@@ -1045,6 +1046,9 @@ export default function Campaigns() {
   const [prefill, setPrefill] = useState<EmailCampaign | null>(null);
   const [templateFormOpen, setTemplateFormOpen] = useState(false);
   const [launchTarget, setLaunchTarget] = useState<EmailCampaign | null>(null);
+  // "launch" = normal workflow (also used for "New Launch"); "relaunch" =
+  // re-send to existing leads with the current scripts (skips lead processing).
+  const [launchMode, setLaunchMode] = useState<"launch" | "relaunch">("launch");
   const [launchResult, setLaunchResult] = useState<LaunchResult | null>(null);
   const [selectedLaunch, setSelectedLaunch] = useState<EmailCampaignLaunch | null>(null);
   const [deleteTemplateTarget, setDeleteTemplateTarget] = useState<EmailCampaignTemplate | null>(null);
@@ -1134,8 +1138,11 @@ export default function Campaigns() {
   });
 
   const launchMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const res = await apiRequest("POST", `/api/email-campaigns/${id}/launch`);
+    mutationFn: async ({ id, mode }: { id: string; mode: "launch" | "relaunch" }) => {
+      const res = await apiRequest(
+        "POST",
+        `/api/email-campaigns/${id}/${mode === "relaunch" ? "relaunch" : "launch"}`,
+      );
       return res.json();
     },
     onSuccess: (data) => {
@@ -1432,7 +1439,7 @@ export default function Campaigns() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {campaignsPaged.slice.map((c) => {
                   const isLaunching =
-                    launchMutation.isPending && launchMutation.variables === c.id;
+                    launchMutation.isPending && launchMutation.variables?.id === c.id;
                   const placeholders = extractPlaceholders([
                     ...(c.mainScripts ?? []),
                     ...(c.followUps ?? []),
@@ -1497,17 +1504,41 @@ export default function Campaigns() {
                           <Button
                             size="sm"
                             className="flex-1"
-                            onClick={() => setLaunchTarget(c)}
+                            onClick={() => {
+                              setLaunchMode("launch");
+                              setLaunchTarget(c);
+                            }}
                             disabled={isLaunching}
                             data-testid={`button-launch-${c.id}`}
                           >
-                            {isLaunching ? (
+                            {isLaunching && launchMutation.variables?.mode !== "relaunch" ? (
                               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                             ) : (
                               <Rocket className="h-4 w-4 mr-2" />
                             )}
-                            {c.status === "launched" ? "Re-launch" : "Launch"}
+                            {c.status === "launched" ? "New Launch" : "Launch"}
                           </Button>
+                          {c.status === "launched" && (
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              className="flex-1"
+                              onClick={() => {
+                                setLaunchMode("relaunch");
+                                setLaunchTarget(c);
+                              }}
+                              disabled={isLaunching}
+                              data-testid={`button-relaunch-${c.id}`}
+                              title="Re-send to the existing leads with the current scripts (skips lead processing)"
+                            >
+                              {isLaunching && launchMutation.variables?.mode === "relaunch" ? (
+                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                              ) : (
+                                <RefreshCw className="h-4 w-4 mr-2" />
+                              )}
+                              Relaunch
+                            </Button>
+                          )}
                           <Button
                             size="sm"
                             variant="outline"
@@ -1639,7 +1670,19 @@ export default function Campaigns() {
                               <XCircle className="h-5 w-5 text-destructive shrink-0" />
                             )}
                             <div className="min-w-0 flex-1">
-                              <p className="font-medium truncate">{l.campaignName}</p>
+                              <div className="flex items-center gap-2 min-w-0">
+                                <p className="font-medium truncate">{l.campaignName}</p>
+                                {l.launchType === "relaunch" && (
+                                  <Badge
+                                    variant="outline"
+                                    className="shrink-0"
+                                    data-testid={`badge-relaunch-${l.id}`}
+                                  >
+                                    <RefreshCw className="h-3 w-3 mr-1" />
+                                    Relaunch
+                                  </Badge>
+                                )}
+                              </div>
                               <p className="text-xs text-muted-foreground">
                                 {formatDateTime(l.launchedAt)}
                                 {l.detail ? ` · ${l.detail}` : ""}
@@ -1870,13 +1913,25 @@ export default function Campaigns() {
         <AlertDialogContent className="max-w-lg">
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {launchTarget?.status === "launched"
-                ? "Re-launch this campaign?"
-                : "Launch this campaign?"}
+              {launchMode === "relaunch"
+                ? "Relaunch this campaign?"
+                : launchTarget?.status === "launched"
+                  ? "Start a new launch?"
+                  : "Launch this campaign?"}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              This will trigger the live email workflow for{" "}
-              <strong>{launchTarget?.campaignName}</strong>. Here's exactly what will be sent:
+              {launchMode === "relaunch" ? (
+                <>
+                  This re-sends emails to the leads that were already processed for{" "}
+                  <strong>{launchTarget?.campaignName}</strong>, using the current scripts — it
+                  skips lead processing. Here's exactly what will be sent:
+                </>
+              ) : (
+                <>
+                  This will trigger the live email workflow for{" "}
+                  <strong>{launchTarget?.campaignName}</strong>. Here's exactly what will be sent:
+                </>
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           {launchTarget && (
@@ -1903,16 +1958,22 @@ export default function Campaigns() {
               disabled={launchMutation.isPending}
               onClick={(e) => {
                 e.preventDefault();
-                if (launchTarget) launchMutation.mutate(launchTarget.id);
+                if (launchTarget) launchMutation.mutate({ id: launchTarget.id, mode: launchMode });
               }}
               data-testid="button-confirm-launch"
             >
               {launchMutation.isPending ? (
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : launchMode === "relaunch" ? (
+                <RefreshCw className="h-4 w-4 mr-2" />
               ) : (
                 <Rocket className="h-4 w-4 mr-2" />
               )}
-              {launchTarget?.status === "launched" ? "Re-launch" : "Launch"}
+              {launchMode === "relaunch"
+                ? "Relaunch"
+                : launchTarget?.status === "launched"
+                  ? "New Launch"
+                  : "Launch"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -2060,6 +2121,12 @@ export default function Campaigns() {
             </DialogTitle>
             <DialogDescription className="flex items-center gap-2">
               {formatDateTime(selectedLaunch?.launchedAt)}
+              {selectedLaunch?.launchType === "relaunch" && (
+                <Badge variant="outline" className="shrink-0" data-testid="badge-detail-relaunch">
+                  <RefreshCw className="h-3 w-3 mr-1" />
+                  Relaunch
+                </Badge>
+              )}
               {selectedLaunch && <RunBadge launch={selectedLaunch} />}
             </DialogDescription>
           </DialogHeader>

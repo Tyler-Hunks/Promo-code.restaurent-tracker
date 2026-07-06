@@ -515,6 +515,7 @@ export class MemStorage implements IStorage {
       campaignName: data.campaignName,
       status: data.status,
       detail: data.detail ?? null,
+      launchType: data.launchType ?? null,
       runStatus: data.runStatus ?? null,
       runDetail: data.runDetail ?? null,
       runFinishedAt: null,
@@ -924,6 +925,7 @@ export class DatabaseStorage implements IStorage {
       campaignName: data.campaignName,
       status: data.status,
       detail: data.detail ?? null,
+      launchType: data.launchType ?? null,
       runStatus: data.runStatus ?? null,
       runDetail: data.runDetail ?? null,
     }).returning();

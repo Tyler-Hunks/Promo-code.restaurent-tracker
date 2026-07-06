@@ -207,6 +207,11 @@ The app needs one required value and one optional value:
 | -------------------- | --------------------------------------------------------------- |
 | `N8N_WEBHOOK_URL`    | **Required.** The Production URL from your n8n Webhook node      |
 | `N8N_WEBHOOK_SECRET` | **Optional but recommended.** Used for Header Auth on the launch webhook **and** to verify run-status callbacks from n8n (the History tab's live badges need it) |
+| `N8N_RELAUNCH_WEBHOOK_URL` | **Optional.** The Production URL of your separate **Campaign Relaunch** workflow's Webhook node. Enables the *Relaunch* button (re-sends to existing leads with the current scripts, skips lead processing). Until it's set, pressing *Relaunch* just says it isn't configured yet. |
+| `N8N_RELAUNCH_WEBHOOK_SECRET` | **Optional.** Header Auth password for the relaunch webhook — sent in the same `X-Trigger-Secret` header. Also accepted on run-status callbacks (`X-Callback-Secret`), so the relaunch workflow can update the History badges too. |
+
+The relaunch webhook receives the **exact same payload** as the launch one —
+only the URL (and secret value) differ.
 
 ### Development (here in Replit)
 
@@ -228,6 +233,10 @@ wrangler secret put N8N_WEBHOOK_URL
 # Only if you turned on Header Auth in n8n:
 wrangler secret put N8N_WEBHOOK_SECRET
 # paste your chosen password when prompted
+
+# Only if you use the Relaunch button (separate Campaign Relaunch workflow):
+wrangler secret put N8N_RELAUNCH_WEBHOOK_URL
+wrangler secret put N8N_RELAUNCH_WEBHOOK_SECRET
 ```
 
 These must be set on the **default** environment (the one the deploy command

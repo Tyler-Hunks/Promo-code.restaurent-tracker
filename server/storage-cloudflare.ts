@@ -552,6 +552,7 @@ export class CloudflareStorage implements IStorage {
       campaignName: r.campaign_name,
       status: r.status,
       detail: r.detail ?? null,
+      launchType: r.launch_type ?? null,
       runStatus: r.run_status ?? null,
       runDetail: r.run_detail ?? null,
       runFinishedAt: r.run_finished_at ? new Date(r.run_finished_at) : null,
@@ -734,6 +735,7 @@ export class CloudflareStorage implements IStorage {
         campaign_name: data.campaignName,
         status: data.status,
         detail: data.detail ?? null,
+        launch_type: data.launchType ?? null,
         run_status: data.runStatus ?? null,
         run_detail: data.runDetail ?? null,
       })

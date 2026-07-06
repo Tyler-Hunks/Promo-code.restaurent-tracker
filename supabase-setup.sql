@@ -163,6 +163,9 @@ CREATE TABLE IF NOT EXISTS email_campaign_launches (
     run_status TEXT CHECK (run_status IN ('in_progress', 'finished', 'failed')),
     run_detail TEXT,
     run_finished_at TIMESTAMP WITH TIME ZONE,
+    -- 'launch' = normal workflow (processes new leads); 'relaunch' = Campaign
+    -- Relaunch workflow (skips lead processing). NULL on legacy rows = launch.
+    launch_type TEXT CHECK (launch_type IN ('launch', 'relaunch')),
     launched_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 );
 
@@ -182,6 +185,10 @@ ALTER TABLE email_campaign_templates ADD COLUMN IF NOT EXISTS default_raw_sheet_
 ALTER TABLE email_campaign_launches ADD COLUMN IF NOT EXISTS run_status TEXT CHECK (run_status IN ('in_progress', 'finished', 'failed'));
 ALTER TABLE email_campaign_launches ADD COLUMN IF NOT EXISTS run_detail TEXT;
 ALTER TABLE email_campaign_launches ADD COLUMN IF NOT EXISTS run_finished_at TIMESTAMP WITH TIME ZONE;
+
+-- 1d) Launch vs Relaunch tagging in the history. Nullable so legacy rows
+--     (from before the two launch modes existed) still load fine.
+ALTER TABLE email_campaign_launches ADD COLUMN IF NOT EXISTS launch_type TEXT CHECK (launch_type IN ('launch', 'relaunch'));
 
 -- 2) Preserve any old single gid (campaign_info_gid) by copying it into sheet_ids
 --    BEFORE the obsolete columns are dropped, so existing data is never silently
