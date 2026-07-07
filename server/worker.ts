@@ -311,8 +311,34 @@ async function handleAPI(request: Request, env: Env): Promise<Response> {
         });
       }
 
-      const { runId, status, detail } = parsed.data;
-      const updated = await storage(env).completeEmailCampaignRun(runId, status, detail ?? null);
+      const { runId, status, campaignName, detail } = parsed.data;
+
+      // The n8n Error Trigger workflow never sees the original launch payload,
+      // so it can't send a runId. Fall back to the newest run that's still
+      // in progress (optionally narrowed by campaignName) — with launches
+      // fired manually one at a time, that's the run that just crashed.
+      let targetId = runId ?? null;
+      if (!targetId) {
+        const launches = await storage(env).getEmailCampaignLaunches();
+        const wanted = campaignName?.trim().toLowerCase();
+        const candidate = launches
+          .filter((l) => l.runStatus === 'in_progress')
+          .filter((l) => !wanted || l.campaignName.trim().toLowerCase() === wanted)
+          .sort((a, b) => new Date(b.launchedAt).getTime() - new Date(a.launchedAt).getTime())[0];
+        if (!candidate) {
+          return new Response(JSON.stringify({
+            message: campaignName
+              ? `No in-progress run found for campaign "${campaignName}"`
+              : 'No in-progress run found to update',
+          }), {
+            status: 404,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+        targetId = candidate.id;
+      }
+
+      const updated = await storage(env).completeEmailCampaignRun(targetId, status, detail ?? null);
       if (!updated) {
         return new Response(JSON.stringify({ message: 'No launch found for that runId' }), {
           status: 404,
@@ -848,7 +874,7 @@ async function handleAPI(request: Request, env: Env): Promise<Response> {
       const runId = crypto.randomUUID();
       const callbackUrl = `${url.origin}/api/campaign-runs/callback`;
       const payload = {
-        ...buildLaunchRequestBody(campaign),
+        ...buildLaunchRequestBody(campaign, isRelaunch ? 'relaunch' : 'launch'),
         runId,
         callbackUrl,
       };

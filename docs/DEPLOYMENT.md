@@ -15,6 +15,57 @@ Both server implementations (`server/routes.ts` for Express, `server/worker.ts` 
 
 > **Note:** the development environment cannot reach the Supabase database (network restriction), so dev API calls return 500. Verify changes with `npx tsc --noEmit` and against the deployed Worker.
 
+## First-time setup (step by step)
+
+Follow this once, on a machine (or Replit workspace) that has never deployed the app before. If the app is already deploying fine, skip to [Deploying](#deploying).
+
+**Step 1 — install dependencies.**
+
+```bash
+npm install --legacy-peer-deps
+```
+
+(`--legacy-peer-deps` avoids a known ERESOLVE conflict — see troubleshooting below.)
+
+**Step 2 — log Wrangler in to Cloudflare.** Wrangler is the Cloudflare tool that uploads the app; it's already installed with the project. Two ways to authenticate:
+
+- **On your own computer:** run `npx wrangler login` — a browser window opens, log in to the Cloudflare account that owns the `promo-code-manager` Worker and click **Allow**.
+- **On Replit (or any machine without a browser):** use an API token instead. In the Cloudflare dashboard go to **My Profile → API Tokens → Create Token**, use the **"Edit Cloudflare Workers"** template, and save the token as the `CLOUDFLARE_API_TOKEN` environment variable (in Replit: the Secrets pane). Wrangler picks it up automatically — no login command needed.
+
+Check it worked:
+
+```bash
+npx wrangler whoami
+```
+
+You should see the Cloudflare account name/email. If it says "not authenticated", the login or token isn't set up yet.
+
+**Step 3 — set up the database (first time only).** In [Supabase](https://supabase.com), open the project (or create one), go to **SQL Editor**, paste the whole `supabase-setup.sql` file from the project root, and click **Run**. It's safe to re-run any time.
+
+**Step 4 — set the production secrets.** The Worker needs its own copies of the secrets (they are *not* copied from Replit). For each one in the [Secrets table below](#secrets-production-worker):
+
+```bash
+echo "<value>" | npx wrangler secret put SECRET_NAME
+```
+
+At minimum the app needs `API_KEY`, `SUPABASE_URL`, and `SUPABASE_ANON_KEY` to work; the n8n and Google ones can be added later. To see which secrets already exist: `npx wrangler secret list`.
+
+**Step 5 — deploy.**
+
+```bash
+npm run deploy
+```
+
+Wait 1–2 minutes. A successful deploy ends with a **Version ID** and the live URLs.
+
+**Step 6 — check it's live.**
+
+1. Open `https://blueempiregroup.co.uk` — the login page should load.
+2. Log in with the API key (the `API_KEY` secret value).
+3. Open `https://blueempiregroup.co.uk/campaigns` directly — it should load, not show an error.
+
+> **Custom domain note:** the `blueempiregroup.co.uk` route is already configured in `wrangler.toml` and on Cloudflare. It only works when the domain's DNS is managed by the **same Cloudflare account** you deploy with. The `...workers.dev` address always works as a backup.
+
 ## Deploying
 
 ```bash
@@ -79,4 +130,4 @@ For the raw-sheet lead check ("Connect Google" in the launch dialog):
 
 ---
 
-*Last updated: July 6, 2026.*
+*Last updated: July 7, 2026.*

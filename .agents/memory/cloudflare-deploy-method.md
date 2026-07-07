@@ -8,9 +8,11 @@ Deploying the production Cloudflare Worker (`npm run deploy`) exceeds the 120s b
 **Why:** The build+wrangler upload takes ~1–2 minutes; the bash tool kills long/backgrounded processes.
 
 **How to apply:** Use a temporary workflow via code_execution:
-1. `configureWorkflow({name: "Deploy to Cloudflare", command: "bash -c 'rm -f /tmp/deploy.log; npm run deploy 2>&1 | tee /tmp/deploy.log; echo DEPLOY_EXIT_DONE >> /tmp/deploy.log'", outputType: "console", autoStart: true})`
-2. Sleep ~45s, then `tail /tmp/deploy.log` and confirm `DEPLOY_EXIT_DONE` + a Version ID.
+1. `configureWorkflow({name: "Deploy to Cloudflare", command: "bash -c 'rm -f /tmp/deploy.log; (npm run build && npx wrangler deploy --env= --experimental-deploy-remote-diff-check=false) 2>&1 | tee /tmp/deploy.log; echo DEPLOY_EXIT_DONE >> /tmp/deploy.log'", autoStart: true})` (no `tasks`/`mode` params — the callback takes `command` directly)
+2. Sleep ~55s, then `tail /tmp/deploy.log` and confirm `DEPLOY_EXIT_DONE` + a Version ID.
 3. `removeWorkflow({name: "Deploy to Cloudflare"})` to clean up.
+
+**wrangler remote-diff gotcha:** if the worker was last touched from the Cloudflare Dashboard, plain `npm run deploy` (wrangler 4.49) dies with "`wrangler init --from-dash` is not yet supported for Workers with Assets" — a hidden default-on flag (`experimental-deploy-remote-diff-check`) downloads the remote config and can't handle assets. Fix: pass `--experimental-deploy-remote-diff-check=false` (used in the command above; can't add it to package.json — editing it is forbidden). Transient `error code: 522` from prod API right after deploy = Worker→Supabase blip; retry once before suspecting code.
 
 Also: dev database (Neon/`api.pooler.supabase.com`) is unreachable from the dev environment (ENOTFOUND), so dev API calls 500 — verify changes with `tsc --noEmit` and against the deployed worker (blueempiregroup.co.uk) instead.
 

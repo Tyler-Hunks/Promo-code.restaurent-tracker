@@ -47,6 +47,7 @@ every list.
 
 ```json
 {
+  "mode": "launch",
   "campaignId": "uuid",
   "campaignName": "June Restaurant Outreach",
   "campaignType": "cold-email",
@@ -82,6 +83,7 @@ Field guide:
 
 | Field                 | Meaning                                                                          |
 | --------------------- | -------------------------------------------------------------------------------- |
+| `mode`                | `"launch"` for a full run (Launch / New Launch — processes new leads first) or `"relaunch"` (re-send to existing leads, skips processing). Use this to branch your n8n workflow. |
 | `campaignId`          | The campaign's unique ID in this app.                                             |
 | `campaignName`        | The campaign's display name.                                                      |
 | `campaignType`        | A free-text label (e.g. `cold-email`), or `null`.                                |
@@ -166,18 +168,36 @@ your workflow (after all the email work is done):
 ```
 
 **Step 2 — report failure (recommended).** Create a second, tiny workflow that
-starts with an **Error Trigger** node, followed by the same **HTTP Request**
-node but with `"status": "failed"` and a short error message as `detail`. Then,
-in your main workflow's **Settings**, set this as the **Error workflow**. In the
-Error Trigger workflow the original launch data isn't available directly — the
-easiest approach is to stash `runId` and `callbackUrl` into the workflow's
-execution data early on, or read them from
-`{{ $json.execution.error }}` context if your n8n version passes it through.
-If the failure callback can't find the runId, the launch simply stays
-**In progress** and flips to **Needs checking** after 30 minutes — nothing breaks.
+starts with an **Error Trigger** node, followed by an **HTTP Request** node.
+Then, in your main workflow's **Settings**, set this as the **Error workflow**.
+
+The Error Trigger never sees the original launch payload, so it has **no
+`runId` and no `callbackUrl`**. That's fine — both can be omitted:
+
+- **URL:** hardcode it: `https://blueempiregroup.co.uk/api/campaign-runs/callback`
+- **Header:** `X-Callback-Secret` = your `N8N_WEBHOOK_SECRET` value
+- **Body (JSON):**
+
+```json
+{
+  "status": "failed",
+  "detail": "{{ $json.execution.error.message }}"
+}
+```
+
+When no `runId` is sent, the app marks the **most recent run that is still "In
+progress"** as failed. Since launches are fired one at a time from the app,
+that is the run that just crashed. If you ever run several campaigns at once,
+add `"campaignName": "..."` to the body to pick the right one (the workflow
+name is available as `{{ $json.workflow.name }}`, but campaignName must match
+the campaign's name in the app — hardcoding or omitting it is safer).
+
+If the error workflow itself fails to call back, nothing breaks — the launch
+simply stays **In progress** and flips to **Needs checking** after 30 minutes.
 
 The callback replies `200` when the status was saved, `401` for a wrong secret,
-and `404` if the `runId` doesn't match any launch.
+and `404` if the `runId` doesn't match any launch (or, without a `runId`, when
+no run is currently in progress).
 
 ---
 

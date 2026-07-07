@@ -93,6 +93,10 @@ Called **by n8n** when a workflow run finishes or fails. Authenticated with the 
 { "runId": "<the runId from the launch payload>", "status": "finished" | "failed", "detail": "optional text" }
 ```
 
+`runId` may be **omitted** (the n8n Error Trigger never sees the launch payload): the app then updates the most recent run still marked "in progress", optionally narrowed with a `"campaignName"` field. Returns `404` if no matching in-progress run exists.
+
+The launch payload sent **to** n8n includes a `mode` field — `"launch"` (full run, also used for New Launch) or `"relaunch"` (skips lead processing) — so downstream workflows can branch on it.
+
 ## Google connection (raw-sheet lead check)
 
 | Method | Path | Auth | What it does |
@@ -125,4 +129,4 @@ curl -s -X POST https://blueempiregroup.co.uk/api/promo-codes/generate-bulk \
 
 ---
 
-*Last updated: July 6, 2026.*
+*Last updated: July 7, 2026.*

@@ -5,9 +5,9 @@ import { type EmailCampaign, buildLaunchPayload } from "../shared/schema";
 // dev server, the Cloudflare Worker, and the frontend preview never drift. Here
 // we only add the server-side `triggeredAt` stamp (the frontend preview omits
 // it since it isn't known until the launch actually fires).
-export function buildLaunchRequestBody(campaign: EmailCampaign) {
+export function buildLaunchRequestBody(campaign: EmailCampaign, mode: "launch" | "relaunch") {
   return {
-    ...buildLaunchPayload(campaign),
+    ...buildLaunchPayload(campaign, mode),
     triggeredAt: new Date().toISOString(),
   };
 }

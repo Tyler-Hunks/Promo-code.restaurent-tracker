@@ -305,8 +305,13 @@ export const insertEmailCampaignLaunchSchema = createInsertSchema(emailCampaignL
 // Auth is a shared-secret header, not this body. Over-long details are
 // truncated rather than rejected so a verbose error never blocks the update.
 export const runCallbackSchema = z.object({
-  runId: z.string().min(1, "runId is required"),
+  // Preferred: identifies the exact run. May be omitted by the n8n Error
+  // Trigger workflow (which never sees the original payload) — the server then
+  // falls back to the most recent still-in-progress run, optionally narrowed
+  // by campaignName.
+  runId: z.string().min(1).optional().nullable(),
   status: z.enum(["finished", "failed"]),
+  campaignName: z.string().optional().nullable(),
   detail: z
     .string()
     .optional()
@@ -421,7 +426,7 @@ export interface LaunchList {
 // Follow-ups are shared across every list. Each list also carries its own
 // combined placeholders, and the whole campaign gets a combined placeholder
 // list too.
-export function buildLaunchPayload(campaign: EmailCampaign) {
+export function buildLaunchPayload(campaign: EmailCampaign, mode: "launch" | "relaunch") {
   const followUps = campaign.followUps ?? [];
   const variants = campaign.mainScripts ?? [];
   const sheetIds = campaign.sheetIds ?? [];
@@ -440,6 +445,9 @@ export function buildLaunchPayload(campaign: EmailCampaign) {
   });
 
   return {
+    // "launch" = full run (processes new leads first; also used for New
+    // Launch). "relaunch" = re-send to existing leads, skipping processing.
+    mode,
     campaignId: campaign.id,
     campaignName: campaign.campaignName,
     campaignType: campaign.campaignType ?? null,

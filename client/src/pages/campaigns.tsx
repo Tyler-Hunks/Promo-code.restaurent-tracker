@@ -1027,8 +1027,8 @@ function TemplateForm({
 // Launch payload preview — uses the exact same builder the server does, so the
 // preview always matches what n8n receives (minus the auto-added triggeredAt).
 // ---------------------------------------------------------------------------
-function previewPayload(c: EmailCampaign) {
-  return buildLaunchPayload(c);
+function previewPayload(c: EmailCampaign, mode: "launch" | "relaunch") {
+  return buildLaunchPayload(c, mode);
 }
 
 interface LaunchResult {
@@ -2015,7 +2015,7 @@ export default function Campaigns() {
                   className="p-3 text-xs font-mono whitespace-pre-wrap break-all"
                   data-testid="text-payload-preview"
                 >
-                  {JSON.stringify(previewPayload(launchTarget), null, 2)}
+                  {JSON.stringify(previewPayload(launchTarget, launchMode), null, 2)}
                 </pre>
               </ScrollArea>
               <p className="text-xs text-muted-foreground">
