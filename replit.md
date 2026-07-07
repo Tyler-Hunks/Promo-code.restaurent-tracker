@@ -12,6 +12,10 @@ This is a promo code management system built with React, Express, TypeScript, an
 4. **Production**: Deploy to Cloudflare Workers with Supabase database connection
 5. **Features**: Campaign-based analytics, bulk operations, CSV import/export, API token management, Bearer token authentication
 
+## Documentation
+
+All docs live in the `docs/` folder: `MANUAL.md` (user guide), `CAMPAIGNS_SETUP.md` (n8n wiring), `API.md` (endpoint reference), `DEPLOYMENT.md` (Cloudflare/Supabase/Google setup), `TROUBLESHOOTING.md`. See `docs/README.md` for the index.
+
 # User Preferences
 
 Preferred communication style: Simple, everyday language.

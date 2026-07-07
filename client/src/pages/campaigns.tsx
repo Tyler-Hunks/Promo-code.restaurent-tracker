@@ -467,8 +467,8 @@ function SheetIdsEditor({
 // ---------------------------------------------------------------------------
 // Shows how the n8n WORKFLOW itself is doing (not just whether the webhook
 // call was accepted). "In progress" until n8n reports back via the callback;
-// runs silent for over 24h are shown as "No response".
-const RUN_STALE_MS = 24 * 60 * 60 * 1000;
+// runs silent for over 30 minutes flip to "Needs checking".
+const RUN_STALE_MS = 30 * 60 * 1000;
 
 function RunBadge({ launch }: { launch: EmailCampaignLaunch }) {
   if (launch.status === "failed") {
@@ -482,8 +482,13 @@ function RunBadge({ launch }: { launch: EmailCampaignLaunch }) {
     const age = Date.now() - new Date(launch.launchedAt).getTime();
     if (age > RUN_STALE_MS) {
       return (
-        <Badge variant="outline" className="shrink-0" data-testid={`badge-run-${launch.id}`}>
-          No response
+        <Badge
+          variant="outline"
+          className="shrink-0 border-amber-400 text-amber-700 dark:border-amber-600 dark:text-amber-400"
+          data-testid={`badge-run-${launch.id}`}
+        >
+          <AlertTriangle className="h-3 w-3 mr-1" />
+          Needs checking
         </Badge>
       );
     }

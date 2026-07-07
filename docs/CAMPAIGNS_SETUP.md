@@ -141,8 +141,8 @@ Webhook node") and send back a small JSON body.
 The response above only says the webhook **arrived**. To make the History tab
 show whether the workflow itself **finished or failed**, have n8n call the app
 back at the end of the run. Until that callback arrives, the launch shows an
-amber **In progress** badge (after 24 hours of silence it becomes
-**No response**).
+amber **In progress** badge (after 30 minutes of silence it becomes
+**Needs checking**).
 
 **Requirements:** the `N8N_WEBHOOK_SECRET` secret must be set in the app — the
 callback endpoint uses it to verify the request really came from your n8n.
@@ -174,7 +174,7 @@ easiest approach is to stash `runId` and `callbackUrl` into the workflow's
 execution data early on, or read them from
 `{{ $json.execution.error }}` context if your n8n version passes it through.
 If the failure callback can't find the runId, the launch simply stays
-**In progress** and flips to **No response** after 24 hours — nothing breaks.
+**In progress** and flips to **Needs checking** after 30 minutes — nothing breaks.
 
 The callback replies `200` when the status was saved, `401` for a wrong secret,
 and `404` if the `runId` doesn't match any launch.
@@ -287,6 +287,5 @@ The page has three tabs:
 > Sheet IDs**, a **Raw leads Sheet ID**, and **both main scripts** filled in —
 > this protects against sending an incomplete request. Campaigns made before
 > this field existed must be edited to add their Raw leads Sheet ID before they
-> can launch again. Campaigns can be created and edited, but
-> **not deleted**, so your launch history is always kept. Templates **can** be
-> deleted.
+> can launch again. Campaigns can be created, edited, and deleted; templates
+> can too. Launch history is kept even after a campaign is deleted.
