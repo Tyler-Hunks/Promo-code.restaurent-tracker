@@ -420,6 +420,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Delete all promo codes for optimization.
+  // Must be registered BEFORE the "/:code" route below, otherwise Express
+  // matches "all" as a :code param and this handler never runs.
+  app.delete("/api/promo-codes/all", async (req, res) => {
+    try {
+      const deletedCount = await storage.deleteAllPromoCodes();
+      res.json({ 
+        message: `All ${deletedCount} promo codes deleted successfully`, 
+        deletedCount 
+      });
+    } catch (error) {
+      console.error("Delete all codes error:", error);
+      res.status(500).json({ 
+        message: "Failed to delete all promo codes",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
   // Delete a promo code
   app.delete("/api/promo-codes/:code", async (req, res) => {
     try {
@@ -453,23 +472,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Bulk delete error:", error);
       res.status(500).json({ 
         message: "Failed to delete promo codes",
-        error: error instanceof Error ? error.message : "Unknown error"
-      });
-    }
-  });
-
-  // Delete all promo codes for optimization
-  app.delete("/api/promo-codes/all", async (req, res) => {
-    try {
-      const deletedCount = await storage.deleteAllPromoCodes();
-      res.json({ 
-        message: `All ${deletedCount} promo codes deleted successfully`, 
-        deletedCount 
-      });
-    } catch (error) {
-      console.error("Delete all codes error:", error);
-      res.status(500).json({ 
-        message: "Failed to delete all promo codes",
         error: error instanceof Error ? error.message : "Unknown error"
       });
     }

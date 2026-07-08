@@ -1,6 +1,6 @@
 // Cloudflare Worker entry point
 import { storage } from "./storage-cloudflare";
-import { insertPromoCodeSchema, bulkGenerateSchema, apiTokenGenerateSchema, deleteBulkByFiltersSchema, insertEmailCampaignSchema, updateEmailCampaignSchema, insertEmailCampaignTemplateSchema, runCallbackSchema, parseExpiresAt, LIST_LABELS } from "../shared/schema";
+import { insertPromoCodeSchema, bulkGenerateSchema, apiTokenGenerateSchema, deleteBulkByFiltersSchema, csvImportSchema, insertEmailCampaignSchema, updateEmailCampaignSchema, insertEmailCampaignTemplateSchema, runCallbackSchema, parseExpiresAt, LIST_LABELS } from "../shared/schema";
 import { z } from "zod";
 import { buildLaunchRequestBody, triggerN8nWebhook } from "./n8n";
 import {
@@ -452,6 +452,70 @@ async function handleAPI(request: Request, env: Env): Promise<Response> {
       });
     }
 
+    // Create a single promo code
+    if (path === '/api/promo-codes' && method === 'POST') {
+      try {
+        const body = await request.json();
+        const validation = insertPromoCodeSchema.safeParse(body);
+        if (!validation.success) {
+          return new Response(JSON.stringify({
+            message: "Invalid promo code data",
+            errors: validation.error.errors
+          }), {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+
+        const promoCodeData = validation.data;
+        const createdCode = await storageInstance.createPromoCode({
+          ...promoCodeData,
+          expiresAt: promoCodeData.expiresAt ? new Date(promoCodeData.expiresAt) : undefined
+        });
+
+        return new Response(JSON.stringify(createdCode), {
+          status: 201,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      } catch (error) {
+        if (error instanceof Error && (error.message.includes("unique constraint") || error.message.includes("duplicate") || error.message.includes("already exists"))) {
+          return new Response(JSON.stringify({ message: "Code already exists" }), {
+            status: 409,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+        return new Response(JSON.stringify({ message: error instanceof Error ? error.message : "Failed to create promo code" }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+    }
+
+    // Validate a promo code
+    if (path.startsWith('/api/promo-codes/') && path.endsWith('/validate') && method === 'GET') {
+      const code = path.split('/')[3];
+      const promoCode = await storageInstance.getPromoCodeByCode(code);
+
+      if (!promoCode) {
+        return new Response(JSON.stringify({ message: "Promo code not found" }), {
+          status: 404,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      const now = new Date();
+      const isExpired = promoCode.expiresAt && new Date(promoCode.expiresAt) < now;
+      const isValid = promoCode.status === "unused" && !isExpired;
+
+      return new Response(JSON.stringify({
+        valid: isValid,
+        status: isExpired ? "expired" : promoCode.status,
+        promoCode
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
     if (path === '/api/promo-codes/stats' && method === 'GET') {
       const stats = await storageInstance.getPromoCodeStats();
       return new Response(JSON.stringify(stats), {
@@ -639,8 +703,31 @@ async function handleAPI(request: Request, env: Env): Promise<Response> {
       });
     }
 
+    // Delete ALL promo codes ("Delete All"). Must be checked before the
+    // single-code handler below, otherwise "all" is treated as a code name.
+    if (path === '/api/promo-codes/all' && method === 'DELETE') {
+      try {
+        const deletedCount = await storageInstance.deleteAllPromoCodes();
+        return new Response(JSON.stringify({
+          message: `All ${deletedCount} promo codes deleted successfully`,
+          deletedCount
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      } catch (error) {
+        console.error('Delete all codes error:', error);
+        return new Response(JSON.stringify({
+          message: 'Failed to delete all promo codes',
+          error: error instanceof Error ? error.message : 'Unknown error'
+        }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+    }
+
     // Delete single promo code
-    if (path.startsWith('/api/promo-codes/') && !path.includes('/redeem') && !path.includes('/toggle-status') && !path.includes('/delete-by-filters') && method === 'DELETE') {
+    if (path.startsWith('/api/promo-codes/') && !path.includes('/redeem') && !path.includes('/toggle-status') && !path.includes('/delete-by-filters') && !path.endsWith('/all') && method === 'DELETE') {
       const code = path.split('/')[3];
       const deleted = await storageInstance.deletePromoCode(code);
       
@@ -691,6 +778,47 @@ async function handleAPI(request: Request, env: Env): Promise<Response> {
         return new Response(JSON.stringify({ 
           message: 'Failed to delete promo codes by filters',
           error: error instanceof Error ? error.message : 'Unknown error'
+        }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+    }
+
+    // Import promo codes from CSV
+    if (path === '/api/promo-codes/import' && method === 'POST') {
+      try {
+        const body = await request.json();
+        const validation = csvImportSchema.safeParse(body);
+        if (!validation.success) {
+          return new Response(JSON.stringify({
+            message: "Invalid import data",
+            errors: validation.error.errors
+          }), {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+
+        const { codes } = validation.data;
+        const insertData = codes.map((code: any) => ({
+          code: code.code,
+          campaignName: code.campaignName || undefined,
+          discountValue: code.discountValue || undefined,
+          expiresAt: code.expiresAt ? new Date(code.expiresAt) : undefined,
+        }));
+
+        const result = await storageInstance.importPromoCodes(insertData);
+
+        return new Response(JSON.stringify({
+          message: `Import completed: ${result.imported} imported, ${result.skipped} skipped`,
+          ...result
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      } catch (error) {
+        return new Response(JSON.stringify({
+          message: error instanceof Error ? error.message : "Failed to import promo codes"
         }), {
           status: 500,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
