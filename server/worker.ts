@@ -618,6 +618,27 @@ async function handleAPI(request: Request, env: Env): Promise<Response> {
       });
     }
 
+    // Delete multiple promo codes (bulk "Delete Selected"). Matches the exact
+    // path (no trailing segment) so it never clashes with single-code delete
+    // below, which requires a trailing "/CODE".
+    if (path === '/api/promo-codes' && method === 'DELETE') {
+      const body = await request.json() as any;
+      const codes = body?.codes;
+      if (!Array.isArray(codes) || codes.length === 0) {
+        return new Response(JSON.stringify({ message: 'Invalid codes array' }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+      const deletedCount = await storageInstance.deleteBulkPromoCodes(codes);
+      return new Response(JSON.stringify({
+        message: `${deletedCount} promo codes deleted successfully`,
+        deletedCount
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
     // Delete single promo code
     if (path.startsWith('/api/promo-codes/') && !path.includes('/redeem') && !path.includes('/toggle-status') && !path.includes('/delete-by-filters') && method === 'DELETE') {
       const code = path.split('/')[3];
